@@ -20,21 +20,10 @@ import java.util.List;
  * path is wrong or the respective object is missing, the resulting behavior
  * solely is up to the processing method.
  * 
- * TODO currently the path does not allow to differentiate between multiple
- * elements that would normally all match its description, i.e. with the same
- * tag. This insufficiency may be straightened out by wrapping the TLVTag in a
- * TLVTagIdentifier also listing the offset of occurrences of the specified tag.
- * This would allow to address one specific element out of several elements with
- * identical tags. Certain values of the occurrence index (e.g. negative values)
- * could be used to signal special matching handling like "any" or "last"
- * occurrence.
- * 
- * --> Class signature may change!
- * 
  * @author slutters
  * 
  */
-public class TlvPath extends ArrayList<TlvTag> {
+public class TlvPath extends ArrayList<TlvTagIdentifier> {
 	
 	/* Default serialVersionUID */
 	private static final long serialVersionUID = 1L;
@@ -50,26 +39,34 @@ public class TlvPath extends ArrayList<TlvTag> {
 	 * Basic constructor for constructing this object from a collection representation.
 	 * @param tagList a collection representation of this object
 	 */
-	public TlvPath(List<TlvTag> tagList) {
+	public TlvPath(List<TlvTagIdentifier> tagList) {
 		super(tagList);
 	}
 	
 	/**
+	 * Constructor for constructing this object from a list of {@link TlvTagIdentifier} objects.
+	 * @param tagIdentifiers a list of {@link TlvTagIdentifier} objects
+	 */
+	public TlvPath(TlvTagIdentifier... tagIdentifiers) {
+		for(TlvTagIdentifier curTagIdentifier : tagIdentifiers) {
+			this.add(curTagIdentifier);
+		}
+	}
+	
+	/**
 	 * Constructor for constructing this object from a list of {@link TlvTag} objects.
+	 * <p/>
+	 * The according {@link TlvTagIdentifier} are generated using their TlvTag-only constructor
 	 * @param tags a list of {@link TlvTag} objects
 	 */
 	public TlvPath(TlvTag... tlvTags) {
-		super();
-		
-		if ( tlvTags == null ) {throw new IllegalArgumentException( "path must not be empty" );}
-		
 		for(int i = 0; i < tlvTags.length; i++) {
-			this.add(tlvTags[i]);
+			this.add(new TlvTagIdentifier(tlvTags[i]));
 		}
 	}
 	
 	/*--------------------------------------------------------------------------------*/
-	
+
 	@Override
 	public TlvPath clone() {
 		return new TlvPath(this);
@@ -108,13 +105,21 @@ public class TlvPath extends ArrayList<TlvTag> {
 	 * If the path is empty, null will be returned.
 	 * @return the last object of the path
 	 */
-	public TlvTag getLastElement() {
+	public TlvTagIdentifier getLastElement() {
 		int size = size();
 		if(size == 0) {
 			return null;
 		} else{
 			return get(size - 1);
 		}
+	}
+
+	/**
+	 * Convenience method to add {@link TlvTagIdentifier} based on a {@link TlvTag}
+	 * @param tag TlvTag to be added (will be wrapped in a {@link TlvTagIdentifier})
+	 */
+	public void add(TlvTag tag) {
+		add(new TlvTagIdentifier(tag));
 	}
 	
 }

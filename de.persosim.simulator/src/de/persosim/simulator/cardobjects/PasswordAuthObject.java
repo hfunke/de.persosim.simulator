@@ -1,14 +1,10 @@
 package de.persosim.simulator.cardobjects;
 
+import java.io.UnsupportedEncodingException;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashSet;
 
-import javax.xml.bind.annotation.XmlAttribute;
-import javax.xml.bind.annotation.XmlElement;
-import javax.xml.bind.annotation.XmlRootElement;
-import javax.xml.bind.annotation.adapters.HexBinaryAdapter;
-import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
+import de.persosim.simulator.utils.HexString;
 
 
 /**
@@ -16,17 +12,12 @@ import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
  * @author mboonk
  *
  */
-@XmlRootElement
 public class PasswordAuthObject extends AbstractCardObject implements AuthObject {
 	
-	@XmlElement
 	AuthObjectIdentifier identifier;
 	
-	@XmlElement
-	@XmlJavaTypeAdapter(HexBinaryAdapter.class)
 	byte [] password;
 	
-	@XmlAttribute
 	protected String passwordName;
 	
 	public PasswordAuthObject(){
@@ -60,7 +51,7 @@ public class PasswordAuthObject extends AbstractCardObject implements AuthObject
 
 	@Override
 	public Collection<CardObjectIdentifier> getAllIdentifiers() {
-		Collection<CardObjectIdentifier> result = new HashSet<>();
+		Collection<CardObjectIdentifier> result = super.getAllIdentifiers();
 		result.add(identifier);
 		return result;
 	}
@@ -68,4 +59,20 @@ public class PasswordAuthObject extends AbstractCardObject implements AuthObject
 	public int getPasswordIdentifier(){
 		return identifier.getIdentifier();
 	}
+	
+	@Override
+	public String toString() {
+		StringBuilder sb = new StringBuilder();
+		
+		sb.append("password " + passwordName + " is " + HexString.encode(password));
+		
+		try {
+			sb.append(" (" + (new String(password, "UTF-8")).toString() + ")");
+		} catch (UnsupportedEncodingException e) {
+			sb.append(" (schei? encoding)");
+		}
+		
+		return sb.toString();
+	}
+	
 }

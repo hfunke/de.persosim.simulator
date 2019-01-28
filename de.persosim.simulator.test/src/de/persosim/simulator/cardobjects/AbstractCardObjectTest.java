@@ -5,16 +5,13 @@ import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.LinkedList;
-
-import mockit.Mocked;
 
 import org.junit.Before;
 import org.junit.Test;
 
+import de.persosim.simulator.exception.AccessDeniedException;
+import de.persosim.simulator.protocols.GenericOid;
 import de.persosim.simulator.protocols.Oid;
-import de.persosim.simulator.secstatus.NullSecurityCondition;
-import de.persosim.simulator.secstatus.SecCondition;
 import de.persosim.simulator.secstatus.SecStatus;
 import de.persosim.simulator.test.PersoSimTestCase;
 import de.persosim.simulator.utils.HexString;
@@ -23,9 +20,7 @@ public class AbstractCardObjectTest extends PersoSimTestCase {
 	
 	AbstractFile masterFile;
 	
-	@Mocked
-	SecStatus mockedSecurityStatus;
-	ObjectStore objectStore = new ObjectStore(mockedSecurityStatus);
+	SecStatus securityStatus;
 	
 	class IdentifiableObjectImpl extends AbstractCardObject {
 		protected int id;
@@ -38,7 +33,9 @@ public class AbstractCardObjectTest extends PersoSimTestCase {
 		
 		@Override
 		public Collection<CardObjectIdentifier> getAllIdentifiers() {
-			return new ArrayList<CardObjectIdentifier>(identifiers);
+			Collection<CardObjectIdentifier> result = super.getAllIdentifiers();
+			result.addAll(identifiers);
+			return result;
 		}
 
 		public void addOidIdentifier(CardObjectIdentifier identifier) {
@@ -56,57 +53,40 @@ public class AbstractCardObjectTest extends PersoSimTestCase {
 	}
 	
 	@Before
-	public void setUp() throws ReflectiveOperationException{
+	public void setUp() throws ReflectiveOperationException, AccessDeniedException{
 		// set up OIDs
 		byte[] oidByteArray1 = HexString.toByteArray("00112233445566778899");
 		byte[] oidByteArray2 = HexString.toByteArray("00112233AABBCCDDEEFF");
 		byte[] oidByteArray3 = HexString.toByteArray("55667788990011223344");
 		
-		Oid anonymousTypeOid1 = new Oid(oidByteArray1) {
-			@Override
-			public String getIdString() {
-				return "anonymous type OID 1";
-			}
-		};
+		Oid anonymousTypeOid1 = new GenericOid(oidByteArray1);
 		OidIdentifier oidIdentifier1 = new OidIdentifier(anonymousTypeOid1);
 		
-		Oid anonymousTypeOid2 = new Oid(oidByteArray2) {
-			@Override
-			public String getIdString() {
-				return "anonymous type OID 2";
-			}
-		};
+		Oid anonymousTypeOid2 = new GenericOid(oidByteArray2);
 		OidIdentifier oidIdentifier2 = new OidIdentifier(anonymousTypeOid2);
 		
-		Oid anonymousTypeOid3 = new Oid(oidByteArray3) {
-			@Override
-			public String getIdString() {
-				return "anonymous type OID 3";
-			}
-		};
+		Oid anonymousTypeOid3 = new GenericOid(oidByteArray3);
 		OidIdentifier oidIdentifier3 = new OidIdentifier(anonymousTypeOid3);
 		
-		IdentifiableObjectImpl identifiableObjectImpl1 = new IdentifiableObjectImpl(mockedSecurityStatus, 1);
+		IdentifiableObjectImpl identifiableObjectImpl1 = new IdentifiableObjectImpl(securityStatus, 1);
 		identifiableObjectImpl1.addOidIdentifier(oidIdentifier1);
 		
-		IdentifiableObjectImpl identifiableObjectImpl2 = new IdentifiableObjectImpl(mockedSecurityStatus, 2);
+		IdentifiableObjectImpl identifiableObjectImpl2 = new IdentifiableObjectImpl(securityStatus, 2);
 		identifiableObjectImpl2.addOidIdentifier(oidIdentifier2);
 		
-		IdentifiableObjectImpl identifiableObjectImpl3 = new IdentifiableObjectImpl(mockedSecurityStatus, 3);
+		IdentifiableObjectImpl identifiableObjectImpl3 = new IdentifiableObjectImpl(securityStatus, 3);
 		identifiableObjectImpl3.addOidIdentifier(oidIdentifier3);
 		
-		IdentifiableObjectImpl identifiableObjectImpl123 = new IdentifiableObjectImpl(mockedSecurityStatus, 123);
+		IdentifiableObjectImpl identifiableObjectImpl123 = new IdentifiableObjectImpl(securityStatus, 123);
 		identifiableObjectImpl123.addOidIdentifier(oidIdentifier1);
 		identifiableObjectImpl123.addOidIdentifier(oidIdentifier2);
 		identifiableObjectImpl123.addOidIdentifier(oidIdentifier3);
+
+		securityStatus = new SecStatus();
 		
-		// define access conditions
-		LinkedList<SecCondition> unprotected = new LinkedList<>();
-		unprotected.add(new NullSecurityCondition());
-		
-		// setup fresh file tree in ObjectStore
-		objectStore.reset(mockedSecurityStatus);
-		masterFile = (AbstractFile) objectStore.selectMasterFile();
+		// setup fresh object tree
+		masterFile = new MasterFile();
+		masterFile.setSecStatus(securityStatus);
 		
 		masterFile.addChild(identifiableObjectImpl1);
 		masterFile.addChild(identifiableObjectImpl2);
@@ -120,12 +100,7 @@ public class AbstractCardObjectTest extends PersoSimTestCase {
 	@Test
 	public void testFindChildren_FullMatch() {
 		byte[] oidByteArray = HexString.toByteArray("55");
-		Oid anonymousTypeOid = new Oid(oidByteArray) {
-			@Override
-			public String getIdString() {
-				return "anonymous type OID";
-			}
-		};
+		Oid anonymousTypeOid = new GenericOid(oidByteArray);
 		OidIdentifier oidIdentifier = new OidIdentifier(anonymousTypeOid);
 		
 		Collection<CardObject> cardObjects = masterFile.findChildren(oidIdentifier);
@@ -156,12 +131,7 @@ public class AbstractCardObjectTest extends PersoSimTestCase {
 	@Test
 	public void testFindChildren_MultiMatch() {
 		byte[] oidByteArray = HexString.toByteArray("00");
-		Oid anonymousTypeOid = new Oid(oidByteArray) {
-			@Override
-			public String getIdString() {
-				return "anonymous type OID";
-			}
-		};
+		Oid anonymousTypeOid = new GenericOid(oidByteArray);
 		OidIdentifier oidIdentifier = new OidIdentifier(anonymousTypeOid);
 		
 		Collection<CardObject> cardObjects = masterFile.findChildren(oidIdentifier);
@@ -193,12 +163,7 @@ public class AbstractCardObjectTest extends PersoSimTestCase {
 	@Test
 	public void testFindChildren_noMatch() {
 		byte[] oidByteArray = HexString.toByteArray("FF");
-		Oid anonymousTypeOid = new Oid(oidByteArray) {
-			@Override
-			public String getIdString() {
-				return "anonymous type OID";
-			}
-		};
+		Oid anonymousTypeOid = new GenericOid(oidByteArray);
 		OidIdentifier oidIdentifier = new OidIdentifier(anonymousTypeOid);
 		
 		Collection<CardObject> cardObjects = masterFile.findChildren(oidIdentifier);
@@ -212,20 +177,10 @@ public class AbstractCardObjectTest extends PersoSimTestCase {
 	@Test
 	public void testFindChildren_MultipleIdentifierMatch() {
 		byte[] oidByteArray1 = HexString.toByteArray("0011223344");
-		Oid anonymousTypeOid1 = new Oid(oidByteArray1) {
-			@Override
-			public String getIdString() {
-				return "anonymous type OID 1";
-			}
-		};
+		Oid anonymousTypeOid1 = new GenericOid(oidByteArray1);
 		
 		byte[] oidByteArray2 = HexString.toByteArray("00112233AA");
-		Oid anonymousTypeOid2 = new Oid(oidByteArray2) {
-			@Override
-			public String getIdString() {
-				return "anonymous type OID 2";
-			}
-		};
+		Oid anonymousTypeOid2 = new GenericOid(oidByteArray2);
 		
 		OidIdentifier oidIdentifier1 = new OidIdentifier(anonymousTypeOid1);
 		OidIdentifier oidIdentifier2 = new OidIdentifier(anonymousTypeOid2);

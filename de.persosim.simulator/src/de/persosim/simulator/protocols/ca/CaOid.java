@@ -3,21 +3,15 @@ package de.persosim.simulator.protocols.ca;
 import java.security.InvalidParameterException;
 import java.util.Arrays;
 
-import javax.xml.bind.annotation.XmlRootElement;
-
 import de.persosim.simulator.crypto.CryptoSupport;
 import de.persosim.simulator.crypto.CryptoSupportAes;
 import de.persosim.simulator.crypto.CryptoUtil;
-import de.persosim.simulator.protocols.Oid;
+import de.persosim.simulator.protocols.GenericOid;
 import de.persosim.simulator.utils.HexString;
 
-//XXX SLS continue extracting code shared with {@link PaceOid} to {@link Oid}
-@XmlRootElement
-public class CaOid extends Oid implements Ca {
+public class CaOid extends GenericOid implements Ca {
 	
 	private String idString;
-
-	public CaOid() {}
 	
 	/**
 	 * This constructor constructs a {@link CaOid} based on a byte array representation of a CA OID.
@@ -102,8 +96,6 @@ public class CaOid extends Oid implements Ca {
 	 */
 	public String getSymmetricCipherAlgorithmNameModePadding() {
 		switch (this.getSymmetricCipherAndKeySizeAsByte()) {
-		case Ca.DES3_CBC_CBC:
-			return "DESede/CBC/NoPadding";
 		case Ca.AES_CBC_CMAC_128:
 			return "AES/CBC/NoPadding";
 		case Ca.AES_CBC_CMAC_192:
@@ -145,12 +137,6 @@ public class CaOid extends Oid implements Ca {
 	 */
 	public int getSymmetricCipherKeyLengthInBytes() {
 		switch (this.getSymmetricCipherAndKeySizeAsByte()) {
-		case Ca.DES3_CBC_CBC:
-			/* 
-			 * this is the actual key length,
-			 * effective key length is only 14 bytes as 1 bit per byte is parity information
-			 */
-			return 16;
 		case Ca.AES_CBC_CMAC_128:
 			return 16;
 		case Ca.AES_CBC_CMAC_192:
@@ -168,8 +154,6 @@ public class CaOid extends Oid implements Ca {
 	 */
 	public String getMacName() {
 		switch (this.getSymmetricCipherAlgorithmName()) {
-		case "DESede":
-			return "ISO9797ALG3WITHISO7816-4PADDING";
 		case "AES":
 			return "aescmac";
 		default:
@@ -183,13 +167,11 @@ public class CaOid extends Oid implements Ca {
 	 * @see Oid#getIdString()
 	 * @return common name of OID or null if parameter does not encode a CaOid
 	 */
-	public static String getStringRepresentation(byte[] oidByteArray) {
-		if (Arrays.equals(oidByteArray, id_CA_DH_3DES_CBC_CBC))     return id_CA_DH_3DES_CBC_CBC_STRING;
+	public String getStringRepresentation(byte[] oidByteArray) {
 		if (Arrays.equals(oidByteArray, id_CA_DH_AES_CBC_CMAC_128)) return id_CA_DH_AES_CBC_CMAC_128_STRING;
 		if (Arrays.equals(oidByteArray, id_CA_DH_AES_CBC_CMAC_192)) return id_CA_DH_AES_CBC_CMAC_192_STRING;
 		if (Arrays.equals(oidByteArray, id_CA_DH_AES_CBC_CMAC_256)) return id_CA_DH_AES_CBC_CMAC_256_STRING;
 		 
-		if (Arrays.equals(oidByteArray, id_CA_ECDH_3DES_CBC_CBC))     return id_CA_ECDH_3DES_CBC_CBC_STRING;
 		if (Arrays.equals(oidByteArray, id_CA_ECDH_AES_CBC_CMAC_128)) return id_CA_ECDH_AES_CBC_CMAC_128_STRING;
 		if (Arrays.equals(oidByteArray, id_CA_ECDH_AES_CBC_CMAC_192)) return id_CA_ECDH_AES_CBC_CMAC_192_STRING;
 		if (Arrays.equals(oidByteArray, id_CA_ECDH_AES_CBC_CMAC_256)) return id_CA_ECDH_AES_CBC_CMAC_256_STRING;

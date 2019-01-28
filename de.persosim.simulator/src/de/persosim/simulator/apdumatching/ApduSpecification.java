@@ -1,8 +1,12 @@
 package de.persosim.simulator.apdumatching;
 
-import static de.persosim.simulator.utils.PersoSimLogger.log;
-import de.persosim.simulator.apdu.CommandApdu;
+import de.persosim.simulator.apdu.CommandApduImpl;
 import de.persosim.simulator.apdu.InterindustryCommandApdu;
+
+import static org.globaltester.logging.BasicLogger.log;
+
+import de.persosim.simulator.apdu.CommandApdu;
+import de.persosim.simulator.apdu.IsoSecureMessagingCommandApdu;
 import de.persosim.simulator.exception.CommandParameterUndefinedException;
 import de.persosim.simulator.platform.Iso7816;
 import de.persosim.simulator.tlv.TlvDataObjectContainer;
@@ -15,7 +19,6 @@ import de.persosim.simulator.tlv.TlvTag;
  * @author slutters
  *
  */
-//FIXME AMY review this class after rename based on the last master version)
 public class ApduSpecification implements Iso7816, ApduSpecificationConstants {
 	/* The id, e.g. the name of the resembled APDU */
 	protected String id;
@@ -180,11 +183,11 @@ public class ApduSpecification implements Iso7816, ApduSpecificationConstants {
 	}
 	
 	/**
-	 * This method performs a matching of the specification defined within this object against the provided {@link CommandApdu}.
+	 * This method performs a matching of the specification defined within this object against the provided {@link CommandApduImpl}.
 	 * The matching is positive only iff all parameters match.
 	 * Parameters match iff the received parameters are optional, equal the expected ones or do not equal parameters expected to mismatch.
 	 * @param apdu the {@link CommandApdu} to match
-	 * @return whether the specification defined within this object matches against the provided {@link CommandApdu}
+	 * @return whether the specification defined within this object matches against the provided {@link CommandApduImpl}
 	 */
 	public boolean matchesFullApdu(CommandApdu apdu) {
 		byte isoCaseReceived;
@@ -194,7 +197,7 @@ public class ApduSpecification implements Iso7816, ApduSpecificationConstants {
 		if(!elementMatch) {return false;}
 		
 		if (reqChaining != REQ_OPTIONAL) {
-			if (!(apdu instanceof InterindustryCommandApdu)) { //XXX AMY: use a marker interface to check for channel abilities to provide more generic way
+			if (!(apdu instanceof InterindustryCommandApdu)) {
 				log(ApduSpecification.class, "apdu class does not support channels");
 				return false;
 			}
@@ -224,8 +227,8 @@ public class ApduSpecification implements Iso7816, ApduSpecificationConstants {
 		if(reqSecureMessaging != REQ_OPTIONAL) {
 			CommandApdu curApdu = apdu;
 			while (curApdu != null) {
-				if ((curApdu instanceof InterindustryCommandApdu) && //XXX AMY use a marker interface to check for secure messaging abilities to provide more generic way
-						(secureMessaging == ((InterindustryCommandApdu) curApdu).getSecureMessaging())) {
+				if ((curApdu instanceof IsoSecureMessagingCommandApdu) &&
+						(secureMessaging == ((IsoSecureMessagingCommandApdu) curApdu).getSecureMessaging())) {
 					if(reqSecureMessaging == REQ_MATCH) {
 						break;
 					} else {
@@ -240,7 +243,7 @@ public class ApduSpecification implements Iso7816, ApduSpecificationConstants {
 		}
 		
 		if (reqChannel != REQ_OPTIONAL) {
-			if (!(apdu instanceof InterindustryCommandApdu)) { //XXX use a marker interface to check for channel abilities to provide more generic way
+			if (!(apdu instanceof InterindustryCommandApdu)) { //IMPL use a marker interface to check for channel abilities to provide more generic way
 				log(ApduSpecification.class, "apdu class does not support channels");
 				return false;
 			}

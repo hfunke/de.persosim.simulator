@@ -1,5 +1,6 @@
 package de.persosim.simulator.tlv;
 
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.Iterator;
 
@@ -70,6 +71,30 @@ public class ConstructedTlvDataObject extends TlvDataObject implements TlvDataSt
 		tlvDataObjectContainer = new TlvDataObjectContainer(byteArray, minOffsetSub, maxOffsetSub);
 	}
 	
+	@Override
+	public int hashCode() {
+		return super.hashCode(); //super implementation already covers tlvDataObjectContainer implicitly through getValue()
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		return super.equals(obj); //super implementation already covers tlvDataObjectContainer implicitly through getValue()
+	}
+
+	/**
+	 * Constructor for a TLV data object with constructed encoding based on a fixed array of raw bytes.
+	 * The defined byte array must contain exactly the whole TLV data object.
+	 * 
+	 * @param byteArray the array that contains the TLV data object
+	 */
+	public ConstructedTlvDataObject(byte[] byteArray) {
+		this(byteArray, 0, byteArray.length);
+		
+		if(this.getLength() != byteArray.length) {
+			throw new IllegalArgumentException("input data is longer than actual TLV data object");
+		}
+	}
+	
 	/**
 	 * Constructs an object from pre-fabricated elements explicitly setting a length field.
 	 * Length fields only need to be explicitly set if their encoding complies with BER but
@@ -81,9 +106,6 @@ public class ConstructedTlvDataObject extends TlvDataObject implements TlvDataSt
 	 */
 	public ConstructedTlvDataObject(TlvTag tlvTagInput, TlvLength tlvLengthInput, TlvDataObjectContainer tlvDataObjectContainerInput, boolean performValidityChecksInput) {
 		super(performValidityChecksInput);
-		
-		if(tlvTagInput == null) {throw new NullPointerException("tag must not be null");}
-		if(tlvDataObjectContainerInput == null) {throw new NullPointerException("value must not be null");}
 		
 		this.setTag(tlvTagInput, performValidityChecksInput);
 		this.setValue(tlvDataObjectContainerInput);
@@ -131,10 +153,10 @@ public class ConstructedTlvDataObject extends TlvDataObject implements TlvDataSt
 	 * Constructs an object from pre-fabricated elements. Length field is implicitly set
 	 * according to DER encoding rules by default.
 	 * @param tlvTagInput the tag to be used
-	 * @param tlvDataObjectInput the value to be used
+	 * @param tlvDataObjectInputs the value elemets to be used
 	 */
-	public ConstructedTlvDataObject(TlvTag tlvTagInput, TlvDataObject tlvDataObjectInput) {
-		this(tlvTagInput, new TlvDataObjectContainer(tlvDataObjectInput));
+	public ConstructedTlvDataObject(TlvTag tlvTagInput, TlvDataObject... tlvDataObjectInputs) {
+		this(tlvTagInput, new TlvDataObjectContainer(tlvDataObjectInputs));
 	}
 	
 	/**
@@ -147,18 +169,14 @@ public class ConstructedTlvDataObject extends TlvDataObject implements TlvDataSt
 	}
 	
 	/*--------------------------------------------------------------------------------*/
-	
+
 	@Override
 	public void setTag(TlvTag tlvTagInput, boolean performValidityChecksInput) {
-		if(tlvTagInput == null) {throw new NullPointerException("tag must not be null");}
-		
+		if(tlvTagInput == null) {throw new IllegalArgumentException("tag must not be null");}
 		if(!tlvTagInput.indicatesEncodingConstructed()) {throw new IllegalArgumentException("tag must be constructed");}
 		
 		performValidityChecks = performValidityChecksInput;
-		
-		if(performValidityChecks) {
-			if(!tlvTagInput.isValidBerEncoding()) {throw new IllegalArgumentException("tag must be valid BER encoding");};
-		}
+		if(performValidityChecks && (!tlvTagInput.isValidBerEncoding())) {throw new IllegalArgumentException("tag must be valid BER encoding");}
 		
 		/*
 		 * TLV tag must be cloned to eliminate outside access to this object.
@@ -180,23 +198,28 @@ public class ConstructedTlvDataObject extends TlvDataObject implements TlvDataSt
 	/*--------------------------------------------------------------------------------*/
 
 	@Override
-	public TlvDataObject getTagField(TlvPath path) {
-		return tlvDataObjectContainer.getTagField(path);
+	public TlvDataObject getTlvDataObject(TlvPath path) {
+		return tlvDataObjectContainer.getTlvDataObject(path);
 	}
 
 	@Override
-	public TlvDataObject getTagField(TlvTag tlvTag) {
-		return tlvDataObjectContainer.getTagField(tlvTag);
+	public TlvDataObject getTlvDataObject(TlvTag tlvTag) {
+		return tlvDataObjectContainer.getTlvDataObject(tlvTag);
+	}
+
+	@Override
+	public TlvDataObject getTlvDataObject(TlvTagIdentifier tagIdentifier) {
+		return tlvDataObjectContainer.getTlvDataObject(tagIdentifier);
 	}
 	
 	@Override
-	public TlvDataObject getTagField(TlvPath path, int index) {
-		return tlvDataObjectContainer.getTagField(path, index);
+	public TlvDataObject getTlvDataObject(TlvPath path, int index) {
+		return tlvDataObjectContainer.getTlvDataObject(path, index);
 	}
 
 	@Override
-	public boolean containsTagField(TlvTag tagField) {
-		return tlvDataObjectContainer.containsTagField(tagField);
+	public boolean containsTlvDataObject(TlvTag tagField) {
+		return tlvDataObjectContainer.containsTlvDataObject(tagField);
 	}
 	
 	/*--------------------------------------------------------------------------------*/
@@ -207,13 +230,23 @@ public class ConstructedTlvDataObject extends TlvDataObject implements TlvDataSt
 	}
 	
 	@Override
-	public void addTlvDataObject(TlvDataObject tlvDataObject) {
+	public void addTlvDataObject(TlvDataObject... tlvDataObject) {
 		tlvDataObjectContainer.addTlvDataObject(tlvDataObject);
 	}
 
 	@Override
 	public void removeTlvDataObject(TlvPath path) {
 		tlvDataObjectContainer.removeTlvDataObject(path);
+	}
+
+	@Override
+	public void removeAllTlvDataObjects() {
+		tlvDataObjectContainer.removeAllTlvDataObjects();
+	}
+
+	@Override
+	public void removeTlvDataObject(TlvTagIdentifier tagIdentifier) {
+		tlvDataObjectContainer.removeTlvDataObject(tagIdentifier);
 	}
 
 	@Override
@@ -268,8 +301,8 @@ public class ConstructedTlvDataObject extends TlvDataObject implements TlvDataSt
 	 * @param tlvDataObjectContainerInput the value to be set
 	 */
 	public void setValue(TlvDataObjectContainer tlvDataObjectContainerInput) {
-		if(tlvDataObjectContainerInput == null) {throw new NullPointerException("value must not be null");}
-		tlvDataObjectContainer = (TlvDataObjectContainer) tlvDataObjectContainerInput;
+		if(tlvDataObjectContainerInput == null) {throw new IllegalArgumentException("value must not be null");}
+		tlvDataObjectContainer = tlvDataObjectContainerInput;
 	}
 
 	@Override
@@ -281,7 +314,22 @@ public class ConstructedTlvDataObject extends TlvDataObject implements TlvDataSt
 	public boolean isValidBerEncoding() {
 		if(!super.isValidBerEncoding()) {return false;}
 		
-		return isConstructedTLVObject();
+		return tlvTag.indicatesEncodingConstructed();
+	}
+
+	/**
+	 * Add all provided {@link TlvDataObject}s to this container.
+	 * @param newTlvDataObjects
+	 */
+	public void addAll(Collection<? extends TlvDataObject> newTlvDataObjects) {
+		for (TlvDataObject curTlvDataObject : newTlvDataObjects) {
+			addTlvDataObject(curTlvDataObject);
+		}
+	}
+	
+	@Override
+	public void remove(TlvDataObject object){
+		tlvDataObjectContainer.remove(object);
 	}
 	
 }

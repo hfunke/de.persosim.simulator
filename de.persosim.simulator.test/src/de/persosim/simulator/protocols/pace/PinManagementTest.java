@@ -8,10 +8,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 
-import mockit.Deencapsulation;
-import mockit.Mocked;
-import mockit.NonStrictExpectations;
-
 import org.junit.Before;
 import org.junit.Test;
 
@@ -22,23 +18,30 @@ import de.persosim.simulator.cardobjects.DomainParameterSetCardObject;
 import de.persosim.simulator.cardobjects.DomainParameterSetIdentifier;
 import de.persosim.simulator.cardobjects.Iso7816LifeCycleState;
 import de.persosim.simulator.cardobjects.MasterFile;
-import de.persosim.simulator.cardobjects.MasterFileIdentifier;
 import de.persosim.simulator.cardobjects.OidIdentifier;
 import de.persosim.simulator.cardobjects.PasswordAuthObject;
 import de.persosim.simulator.cardobjects.PasswordAuthObjectWithRetryCounter;
-import de.persosim.simulator.cardobjects.PinObject;
-import de.persosim.simulator.cardobjects.Scope;
 import de.persosim.simulator.crypto.DomainParameterSet;
-import de.persosim.simulator.crypto.StandardizedDomainParameters;
+import de.persosim.simulator.exception.LifeCycleChangeException;
 import de.persosim.simulator.platform.CardStateAccessor;
 import de.persosim.simulator.platform.Iso7816;
 import de.persosim.simulator.processing.ProcessingData;
 import de.persosim.simulator.protocols.ResponseData;
+import de.persosim.simulator.protocols.ta.CertificateRole;
+import de.persosim.simulator.protocols.ta.RelativeAuthorization;
+import de.persosim.simulator.protocols.ta.TerminalType;
+import de.persosim.simulator.seccondition.OrSecCondition;
+import de.persosim.simulator.seccondition.PaceWithPasswordRunningSecurityCondition;
+import de.persosim.simulator.seccondition.PaceWithPasswordSecurityCondition;
+import de.persosim.simulator.seccondition.TaSecurityCondition;
 import de.persosim.simulator.secstatus.PaceMechanism;
 import de.persosim.simulator.secstatus.SecMechanism;
 import de.persosim.simulator.secstatus.SecStatus.SecContext;
 import de.persosim.simulator.test.PersoSimTestCase;
+import de.persosim.simulator.utils.BitField;
 import de.persosim.simulator.utils.HexString;
+import mockit.Mocked;
+import mockit.NonStrictExpectations;
 
 public class PinManagementTest extends PersoSimTestCase {
 	
@@ -53,42 +56,66 @@ public class PinManagementTest extends PersoSimTestCase {
 	DomainParameterSet domainParameterSet0;
 	Collection<CardObject> domainParameterSet0Collection;
 	DomainParameterSetCardObject domainParameters0;
+	PaceOid oid0;
 	OidIdentifier oidIdentifier0;
 	
 	/**
 	 * Create the test environment.
+	 * @throws LifeCycleChangeException 
 	 * @throws ReflectiveOperationException 
 	 */
 	@Before
-	public void setUp() {
+	public void setUp() throws Exception {
 		AuthObjectIdentifier aoiCan = new AuthObjectIdentifier(new byte[]{(byte) 0x02});
 		AuthObjectIdentifier aoiPin = new AuthObjectIdentifier(new byte[]{(byte) 0x03});
 		
 		pwdaoWithCan = new PasswordAuthObject(aoiCan, new byte[]{(byte) 0xFF});
 		
-		pwdaoWithPinRc0Activated = new PinObject(aoiPin, new byte[]{(byte) 0xFF}, 0, 16, 3);
+		TaSecurityCondition pinManagementCondition = new TaSecurityCondition(TerminalType.AT,
+				new RelativeAuthorization(CertificateRole.TERMINAL, new BitField(38).flipBit(5)));
+		
+		pwdaoWithPinRc0Activated = new PasswordAuthObjectWithRetryCounter(aoiPin, new byte[] { (byte) 0xFF }, "PIN", 0,
+				16, 3, pinManagementCondition, new OrSecCondition(new PaceWithPasswordSecurityCondition("PIN"), new PaceWithPasswordSecurityCondition("PUK")),
+				new PaceWithPasswordSecurityCondition("PUK"),
+				new PaceWithPasswordRunningSecurityCondition("PIN"));
 		pwdaoWithPinRc0Activated.updateLifeCycleState(Iso7816LifeCycleState.OPERATIONAL_ACTIVATED);
 		pwdaoWithPinRc0Activated.decrementRetryCounter();
 		pwdaoWithPinRc0Activated.decrementRetryCounter();
 		pwdaoWithPinRc0Activated.decrementRetryCounter();
-		
-		pwdaoWithPinRc1Activated = new PinObject(aoiPin, new byte[]{(byte) 0xFF}, 0, 16, 3);
+
+		pwdaoWithPinRc1Activated = new PasswordAuthObjectWithRetryCounter(aoiPin, new byte[] { (byte) 0xFF }, "PIN", 0,
+				16, 3, pinManagementCondition, new OrSecCondition(new PaceWithPasswordSecurityCondition("PIN"), new PaceWithPasswordSecurityCondition("PUK")),
+				new PaceWithPasswordSecurityCondition("PUK"),
+				new PaceWithPasswordRunningSecurityCondition("PIN"));
 		pwdaoWithPinRc1Activated.updateLifeCycleState(Iso7816LifeCycleState.OPERATIONAL_ACTIVATED);
 		pwdaoWithPinRc1Activated.decrementRetryCounter();
 		pwdaoWithPinRc1Activated.decrementRetryCounter();
-		
-		pwdaoWithPinRc2Activated = new PinObject(aoiPin, new byte[]{(byte) 0xFF}, 0, 16, 3);
+
+		pwdaoWithPinRc2Activated = new PasswordAuthObjectWithRetryCounter(aoiPin, new byte[] { (byte) 0xFF }, "PIN", 0,
+				16, 3, pinManagementCondition, new OrSecCondition(new PaceWithPasswordSecurityCondition("PIN"), new PaceWithPasswordSecurityCondition("PUK")),
+				new PaceWithPasswordSecurityCondition("PUK"),
+				new PaceWithPasswordRunningSecurityCondition("PIN"));
 		pwdaoWithPinRc2Activated.updateLifeCycleState(Iso7816LifeCycleState.OPERATIONAL_ACTIVATED);
 		pwdaoWithPinRc2Activated.decrementRetryCounter();
-		
-		pwdaoWithPinRc3Activated = new PinObject(aoiPin, new byte[]{(byte) 0xFF}, 0, 16, 3);
+
+		pwdaoWithPinRc3Activated = new PasswordAuthObjectWithRetryCounter(aoiPin, new byte[] { (byte) 0xFF }, "PIN", 0,
+				16, 3, pinManagementCondition, new OrSecCondition(new PaceWithPasswordSecurityCondition("PIN"), new PaceWithPasswordSecurityCondition("PUK")),
+				new PaceWithPasswordSecurityCondition("PUK"),
+				new PaceWithPasswordRunningSecurityCondition("PIN"));
 		pwdaoWithPinRc3Activated.updateLifeCycleState(Iso7816LifeCycleState.OPERATIONAL_ACTIVATED);
-		
-		pwdaoWithPinRc3Deactivated = new PinObject(aoiPin, new byte[]{(byte) 0xFF}, 0, 16, 3);
+
+		pwdaoWithPinRc3Deactivated = new PasswordAuthObjectWithRetryCounter(aoiPin, new byte[] { (byte) 0xFF }, "PIN",
+				0, 16, 3, pinManagementCondition, new OrSecCondition(new PaceWithPasswordSecurityCondition("PIN"), new PaceWithPasswordSecurityCondition("PUK")),
+				new PaceWithPasswordSecurityCondition("PUK"),
+				new PaceWithPasswordRunningSecurityCondition("PIN"));
+		pwdaoWithPinRc3Deactivated.updateLifeCycleState(Iso7816LifeCycleState.OPERATIONAL_ACTIVATED);
 		pwdaoWithPinRc3Deactivated.updateLifeCycleState(Iso7816LifeCycleState.OPERATIONAL_DEACTIVATED);
 		
-		PaceMechanism paceMechanismWithCan = new PaceMechanism(pwdaoWithCan, null, null);
-		PaceMechanism paceMechanismWithPin = new PaceMechanism(pwdaoWithPinRc3Activated, null, null);
+		oid0 = Pace.OID_id_PACE_ECDH_GM_AES_CBC_CMAC_128;
+		oidIdentifier0 = new OidIdentifier(oid0);
+		
+		PaceMechanism paceMechanismWithCan = new PaceMechanism(oid0, pwdaoWithCan, null, null, null);
+		PaceMechanism paceMechanismWithPin = new PaceMechanism(oid0, pwdaoWithPinRc3Activated, null, null, null);
 		
 		csmWithCan = new HashSet<SecMechanism>();
 		csmWithCan.add(paceMechanismWithCan);
@@ -103,8 +130,6 @@ public class PinManagementTest extends PersoSimTestCase {
 		paceProtocol.setCardStateAccessor(mockedCardStateAccessor);
 		paceProtocol.init();
 		
-		oidIdentifier0 = new OidIdentifier(Pace.OID_id_PACE_DH_GM_AES_CBC_CMAC_256);
-		domainParameterSet0 = StandardizedDomainParameters.getDomainParameterSetById(0);
 		domainParameters0 = new DomainParameterSetCardObject(domainParameterSet0, new DomainParameterSetIdentifier(0));
 		domainParameters0.addOidIdentifier(oidIdentifier0);
 		domainParameterSet0Collection = new ArrayList<CardObject>();
@@ -125,7 +150,7 @@ public class PinManagementTest extends PersoSimTestCase {
 			result = csmWithCan;
 		}
 	};
-		assertTrue("PIN temporarily resumed", paceProtocol.isPinTemporarilyResumed());
+		assertTrue("PIN temporarily resumed", AbstractPaceProtocol.isPinTemporarilyResumed(mockedCardStateAccessor));
 	}
 	
 	/**
@@ -142,7 +167,7 @@ public class PinManagementTest extends PersoSimTestCase {
 			result = csmWithPin;
 		}
 	};
-		assertFalse("PIN temporarily resumed", paceProtocol.isPinTemporarilyResumed());
+		assertFalse("PIN temporarily resumed", AbstractPaceProtocol.isPinTemporarilyResumed(mockedCardStateAccessor));
 	}
 	
 	/**
@@ -159,10 +184,9 @@ public class PinManagementTest extends PersoSimTestCase {
 			result = csmEmpty;
 		}
 	};
-		assertFalse("PIN temporarily resumed", paceProtocol.isPinTemporarilyResumed());
+		assertFalse("PIN temporarily resumed", AbstractPaceProtocol.isPinTemporarilyResumed(mockedCardStateAccessor));
 	}
 	
-	//ok
 	/**
 	 * Positive test case: perform PACE with PIN. PIN retry counter is 3 (default), PIN activated.
 	 */
@@ -178,31 +202,25 @@ public class PinManagementTest extends PersoSimTestCase {
 				// previously used password
 				result = csmEmpty;
 				
-				mockedCardStateAccessor.getObject(
-						withInstanceOf(MasterFileIdentifier.class),
-						withInstanceOf(Scope.class));
+				mockedCardStateAccessor.getMasterFile();
 				result = mockedMf;
-
+				
 				mockedMf.findChildren(
 						withInstanceOf(DomainParameterSetIdentifier.class),
 						withInstanceOf(OidIdentifier.class));
 				result = domainParameters0;
 
-				mockedCardStateAccessor.getObject(
-						withInstanceOf(DomainParameterSetIdentifier.class),
-						withInstanceOf(Scope.class));
+				mockedMf.findChildren(withInstanceOf(DomainParameterSetIdentifier.class));
 				result = domainParameters0;
 				
-				mockedCardStateAccessor.getObject(withInstanceOf(AuthObjectIdentifier.class),null);
-				
-				// currently used password
+				mockedMf.findChildren(withInstanceOf(AuthObjectIdentifier.class));
 				result = pwdaoWithPinRc3Activated;
 			}
 		};
 		
 		// select Apdu
 		ProcessingData processingData = new ProcessingData();
-		byte[] apduBytes = HexString.toByteArray("00 22 C1 A4 0F 80 0A 04 00 7F 00 07 02 02 04 01 04 83 01 03");
+		byte[] apduBytes = HexString.toByteArray("00 22 C1 A4 0F 80 0A 04 00 7F 00 07 02 02 04 02 02 83 01 03");
 		processingData.updateCommandApdu(this, "setAT APDU",
 				CommandApduFactory.createCommandApdu(apduBytes));
 
@@ -215,7 +233,6 @@ public class PinManagementTest extends PersoSimTestCase {
 		assertEquals("Statusword is not 9000", Iso7816.SW_9000_NO_ERROR, sw);
 	}
 	
-	//ok
 	/**
 	 * Positive test case: perform PACE with PIN. PIN retry counter is 3 (default), PIN deactivated.
 	 */
@@ -230,9 +247,7 @@ public class PinManagementTest extends PersoSimTestCase {
 				// previously used password
 				result = csmEmpty;
 				
-				mockedCardStateAccessor.getObject(
-						withInstanceOf(MasterFileIdentifier.class),
-						withInstanceOf(Scope.class));
+				mockedCardStateAccessor.getMasterFile();
 				result = mockedMf;
 
 				mockedMf.findChildren(
@@ -240,20 +255,18 @@ public class PinManagementTest extends PersoSimTestCase {
 						withInstanceOf(OidIdentifier.class));
 				result = domainParameters0;
 
-				mockedCardStateAccessor.getObject(
-						withInstanceOf(DomainParameterSetIdentifier.class),
-						withInstanceOf(Scope.class));
+				mockedMf.findChildren(
+						withInstanceOf(DomainParameterSetIdentifier.class));
 				result = domainParameters0;
 
-				mockedCardStateAccessor.getObject(withInstanceOf(AuthObjectIdentifier.class),null);
-				// currently used password
+				mockedMf.findChildren(withInstanceOf(AuthObjectIdentifier.class));
 				result = pwdaoWithPinRc3Deactivated;
 			}
 		};
 		
 		// select Apdu
 		ProcessingData processingData = new ProcessingData();
-		byte[] apduBytes = HexString.toByteArray("00 22 C1 A4 0F 80 0A 04 00 7F 00 07 02 02 04 01 04 83 01 03");
+		byte[] apduBytes = HexString.toByteArray("00 22 C1 A4 0F 80 0A 04 00 7F 00 07 02 02 04 02 02 83 01 03");
 		processingData.updateCommandApdu(this, "setAT APDU",
 				CommandApduFactory.createCommandApdu(apduBytes));
 
@@ -266,7 +279,6 @@ public class PinManagementTest extends PersoSimTestCase {
 		assertEquals("Statusword is not 6283", Iso7816.SW_6283_SELECTED_FILE_DEACTIVATED, sw);
 	}
 	
-	//ok
 	/**
 	 * Positive test case: perform PACE with PIN. PIN retry counter is 2, PIN activated.
 	 */
@@ -278,13 +290,9 @@ public class PinManagementTest extends PersoSimTestCase {
 				mockedCardStateAccessor.getCurrentMechanisms(
 						withInstanceOf(SecContext.class),
 						null);
-				
-				// previously used password
 				result = csmEmpty;
 				
-				mockedCardStateAccessor.getObject(
-						withInstanceOf(MasterFileIdentifier.class),
-						withInstanceOf(Scope.class));
+				mockedCardStateAccessor.getMasterFile();
 				result = mockedMf;
 
 				mockedMf.findChildren(
@@ -292,21 +300,18 @@ public class PinManagementTest extends PersoSimTestCase {
 						withInstanceOf(OidIdentifier.class));
 				result = domainParameters0;
 
-				mockedCardStateAccessor.getObject(
-						withInstanceOf(DomainParameterSetIdentifier.class),
-						withInstanceOf(Scope.class));
+				mockedMf.findChildren(
+						withInstanceOf(DomainParameterSetIdentifier.class));
 				result = domainParameters0;
 				
-				mockedCardStateAccessor.getObject(withInstanceOf(AuthObjectIdentifier.class),null);
-				
-				// currently used password
+				mockedMf.findChildren(withInstanceOf(AuthObjectIdentifier.class));
 				result = pwdaoWithPinRc2Activated;
 			}
 		};
 		
 		// select Apdu
 		ProcessingData processingData = new ProcessingData();
-		byte[] apduBytes = HexString.toByteArray("00 22 C1 A4 0F 80 0A 04 00 7F 00 07 02 02 04 01 04 83 01 03");
+		byte[] apduBytes = HexString.toByteArray("00 22 C1 A4 0F 80 0A 04 00 7F 00 07 02 02 04 02 02 83 01 03");
 		processingData.updateCommandApdu(this, "setAT APDU",
 				CommandApduFactory.createCommandApdu(apduBytes));
 
@@ -319,7 +324,6 @@ public class PinManagementTest extends PersoSimTestCase {
 		assertEquals("Statusword is not 63C2", (short) 0x63C2, sw);
 	}
 	
-	//ok
 	/**
 	 * Positive test case: perform PACE with PIN. PIN retry counter is 1, PIN activated.
 	 */
@@ -331,13 +335,9 @@ public class PinManagementTest extends PersoSimTestCase {
 				mockedCardStateAccessor.getCurrentMechanisms(
 						withInstanceOf(SecContext.class),
 						null);
-				
-				// previously used password
 				result = csmWithCan;
 
-				mockedCardStateAccessor.getObject(
-						withInstanceOf(MasterFileIdentifier.class),
-						withInstanceOf(Scope.class));
+				mockedCardStateAccessor.getMasterFile();
 				result = mockedMf;
 
 				mockedMf.findChildren(
@@ -345,21 +345,17 @@ public class PinManagementTest extends PersoSimTestCase {
 						withInstanceOf(OidIdentifier.class));
 				result = domainParameters0;
 
-				mockedCardStateAccessor.getObject(
-						withInstanceOf(DomainParameterSetIdentifier.class),
-						withInstanceOf(Scope.class));
+				mockedMf.findChildren(withInstanceOf(DomainParameterSetIdentifier.class));
 				result = domainParameters0;
 
-				mockedCardStateAccessor.getObject(withInstanceOf(AuthObjectIdentifier.class), withInstanceOf(Scope.class));
-				
-				// currently used password
+				mockedMf.findChildren(withInstanceOf(AuthObjectIdentifier.class));
 				result = pwdaoWithPinRc1Activated;
 			}
 		};
 		
 		// select Apdu
 		ProcessingData processingData = new ProcessingData();
-		byte[] apduBytes = HexString.toByteArray("00 22 C1 A4 0F 80 0A 04 00 7F 00 07 02 02 04 01 04 83 01 03");
+		byte[] apduBytes = HexString.toByteArray("00 22 C1 A4 0F 80 0A 04 00 7F 00 07 02 02 04 02 02 83 01 03");
 		processingData.updateCommandApdu(this, "setAT APDU",
 				CommandApduFactory.createCommandApdu(apduBytes));
 
@@ -385,13 +381,9 @@ public class PinManagementTest extends PersoSimTestCase {
 				mockedCardStateAccessor.getCurrentMechanisms(
 						withInstanceOf(SecContext.class),
 						null);
-				
-				// previously used password
 				result = csmWithCan;
 				
-				mockedCardStateAccessor.getObject(
-						withInstanceOf(MasterFileIdentifier.class),
-						withInstanceOf(Scope.class));
+				mockedCardStateAccessor.getMasterFile();
 				result = mockedMf;
 
 				mockedMf.findChildren(
@@ -399,21 +391,17 @@ public class PinManagementTest extends PersoSimTestCase {
 						withInstanceOf(OidIdentifier.class));
 				result = domainParameters0;
 
-				mockedCardStateAccessor.getObject(
-						withInstanceOf(DomainParameterSetIdentifier.class),
-						withInstanceOf(Scope.class));
+				mockedMf.findChildren(withInstanceOf(DomainParameterSetIdentifier.class));
 				result = domainParameters0;
 				
-				mockedCardStateAccessor.getObject(withInstanceOf(AuthObjectIdentifier.class),null);
-				
-				// currently used password
+				mockedMf.findChildren(withInstanceOf(AuthObjectIdentifier.class));
 				result = pwdaoWithPinRc1Activated;
 			}
 		};
 		
 		// select Apdu
 		ProcessingData processingData = new ProcessingData();
-		byte[] apduBytes = HexString.toByteArray("00 22 C1 A4 0F 80 0A 04 00 7F 00 07 02 02 04 01 04 83 01 03");
+		byte[] apduBytes = HexString.toByteArray("00 22 C1 A4 0F 80 0A 04 00 7F 00 07 02 02 04 02 02 83 01 03");
 		processingData.updateCommandApdu(this, "setAT APDU",
 				CommandApduFactory.createCommandApdu(apduBytes));
 
@@ -433,18 +421,13 @@ public class PinManagementTest extends PersoSimTestCase {
 	 */
 	@Test
 	public void testGetMutualAuthenticatePinManagementResponsePaceFailed(){
-		paceProtocol.pacePassword = pwdaoWithPinRc3Activated;
-		
 		short sw = (short) 0x63C0;
-		
-		short expectedSw, receivedSw;
-		ResponseData responseDataReceived;
-		
+
 		for(int i = 2; i > 0; i--) {
-			expectedSw = (short) (sw | ((short) (i & (short) 0x000F)));
+			ResponseData responseDataReceived = AbstractPaceProtocol.getMutualAuthenticatePinManagementResponsePaceFailed(pwdaoWithPinRc3Activated);
 			
-			responseDataReceived = Deencapsulation.invoke(paceProtocol, "getMutualAuthenticatePinManagementResponsePaceFailed");
-			receivedSw = responseDataReceived.getStatusWord();
+			short expectedSw = (short) (sw | ((short) (i & (short) 0x000F)));
+			short receivedSw = responseDataReceived.getStatusWord();
 			
 			assertEquals("Statusword is not " + HexString.hexifyShort(expectedSw), expectedSw, receivedSw);
 		}
@@ -455,15 +438,61 @@ public class PinManagementTest extends PersoSimTestCase {
 	 */
 	@Test
 	public void testGetMutualAuthenticatePinManagementResponsePaceSuccessful_PinDeactivated(){
-		paceProtocol.pacePassword = pwdaoWithPinRc3Deactivated;
-		ResponseData responseDataReceived;
+		
+		ResponseData responseDataReceived = AbstractPaceProtocol.getMutualAuthenticatePinManagementResponsePaceSuccessful(pwdaoWithPinRc3Deactivated, mockedCardStateAccessor);
 		
 		short expectedSw = Iso7816.SW_6984_REFERENCE_DATA_NOT_USABLE;
-		
-		responseDataReceived = Deencapsulation.invoke(paceProtocol, "getMutualAuthenticatePinManagementResponsePaceSuccessful");
 		short receivedSw = responseDataReceived.getStatusWord();
+		assertEquals("Statusword mismatch", expectedSw, receivedSw);
+	}
+	
+	/**
+	 * Positive test case: check for correct response in case of PACE with PIN, PIN active, retry counter is 1
+	 */
+	@Test
+	public void testIsPasswordUsable_PinActivatedRc1(){
 		
-		assertEquals("Statusword is not " + HexString.hexifyShort(expectedSw), expectedSw, receivedSw);
+		ResponseData responseDataReceived = AbstractPaceProtocol.isPasswordUsable(pwdaoWithPinRc1Activated, mockedCardStateAccessor);
+		
+		short expectedSw = Iso7816.SW_63C1_COUNTER_IS_1;
+		short receivedSw = responseDataReceived.getStatusWord();
+		assertEquals("Statusword mismatch", HexString.hexifyShort(expectedSw), HexString.hexifyShort(receivedSw));
+	}
+	
+	/**
+	 * Positive test case: check for correct response in case of PACE with PIN, PIN active, retry counter is 2
+	 */
+	@Test
+	public void testIsPasswordUsable_PinActivatedRc2(){
+		
+		ResponseData responseDataReceived = AbstractPaceProtocol.isPasswordUsable(pwdaoWithPinRc2Activated, mockedCardStateAccessor);
+		
+		short expectedSw = 0x63C2;
+		short receivedSw = responseDataReceived.getStatusWord();
+		assertEquals("Statusword mismatch", HexString.hexifyShort(expectedSw), HexString.hexifyShort(receivedSw));
+	}
+	
+	/**
+	 * Positive test case: check for correct response in case of PACE with PIN, PIN active, retry counter is 3
+	 */
+	@Test
+	public void testIsPasswordUsable_PinActivatedRc3(){
+		ResponseData responseDataReceived = AbstractPaceProtocol.isPasswordUsable(pwdaoWithPinRc3Activated, mockedCardStateAccessor);
+		
+		assertEquals(null, responseDataReceived);
+	}
+	
+	/**
+	 * Positive test case: check for correct response in case of PACE with PIN, PIN inactive, retry counter is 3
+	 */
+	@Test
+	public void testIsPasswordUsable_PinDeactivatedRc3(){
+		ResponseData responseDataReceived = AbstractPaceProtocol.isPasswordUsable(pwdaoWithPinRc3Deactivated, mockedCardStateAccessor);
+
+		
+		short expectedSw = SW_6283_SELECTED_FILE_DEACTIVATED;
+		short receivedSw = responseDataReceived.getStatusWord();
+		assertEquals("Statusword mismatch", HexString.hexifyShort(expectedSw), HexString.hexifyShort(receivedSw));
 	}
 	
 	/**
@@ -471,15 +500,11 @@ public class PinManagementTest extends PersoSimTestCase {
 	 */
 	@Test
 	public void testGetMutualAuthenticatePinManagementResponsePaceSuccessful_PinActivatedRc3(){
-		paceProtocol.pacePassword = pwdaoWithPinRc3Activated;
-		ResponseData responseDataReceived;
+		ResponseData responseDataReceived = AbstractPaceProtocol.getMutualAuthenticatePinManagementResponsePaceSuccessful(pwdaoWithPinRc3Activated, mockedCardStateAccessor);
 		
 		short expectedSw = Iso7816.SW_9000_NO_ERROR;
-		
-		responseDataReceived = Deencapsulation.invoke(paceProtocol, "getMutualAuthenticatePinManagementResponsePaceSuccessful");
 		short receivedSw = responseDataReceived.getStatusWord();
-		
-		assertEquals("Statusword is not " + HexString.hexifyShort(expectedSw), expectedSw, receivedSw);
+		assertEquals("Statusword mismatch", expectedSw, receivedSw);
 	}
 	
 	/**
@@ -487,15 +512,11 @@ public class PinManagementTest extends PersoSimTestCase {
 	 */
 	@Test
 	public void testGetMutualAuthenticatePinManagementResponsePaceSuccessful_PinActivatedRc2(){
-		paceProtocol.pacePassword = pwdaoWithPinRc2Activated;
-		ResponseData responseDataReceived;
+		ResponseData responseDataReceived = AbstractPaceProtocol.getMutualAuthenticatePinManagementResponsePaceSuccessful(pwdaoWithPinRc2Activated, mockedCardStateAccessor);
 		
 		short expectedSw = Iso7816.SW_9000_NO_ERROR;
-		
-		responseDataReceived = Deencapsulation.invoke(paceProtocol, "getMutualAuthenticatePinManagementResponsePaceSuccessful");
 		short receivedSw = responseDataReceived.getStatusWord();
-		
-		assertEquals("Statusword is not " + HexString.hexifyShort(expectedSw), expectedSw, receivedSw);
+		assertEquals("Statusword mismatch", expectedSw, receivedSw);
 	}
 	
 	/**
@@ -509,21 +530,15 @@ public class PinManagementTest extends PersoSimTestCase {
 				mockedCardStateAccessor.getCurrentMechanisms(
 						withInstanceOf(SecContext.class),
 						null);
-
-				// previously used password
 				result = csmEmpty;
 			}
 		};
 		
-		paceProtocol.pacePassword = pwdaoWithPinRc1Activated;
-		ResponseData responseDataReceived;
+		ResponseData responseDataReceived = AbstractPaceProtocol.getMutualAuthenticatePinManagementResponsePaceSuccessful(pwdaoWithPinRc1Activated, mockedCardStateAccessor);
 		
 		short expectedSw = Iso7816.SW_6985_CONDITIONS_OF_USE_NOT_SATISFIED;
-		
-		responseDataReceived = Deencapsulation.invoke(paceProtocol, "getMutualAuthenticatePinManagementResponsePaceSuccessful");
 		short receivedSw = responseDataReceived.getStatusWord();
-		
-		assertEquals("Statusword is not " + HexString.hexifyShort(expectedSw), expectedSw, receivedSw);
+		assertEquals("Statusword mismatch", expectedSw, receivedSw);
 	}
 	
 	/**
@@ -537,21 +552,59 @@ public class PinManagementTest extends PersoSimTestCase {
 				mockedCardStateAccessor.getCurrentMechanisms(
 						withInstanceOf(SecContext.class),
 						null);
-
-				// previously used password
 				result = csmWithCan;
 			}
 		};
 		
-		paceProtocol.pacePassword = pwdaoWithPinRc1Activated;
-		ResponseData responseDataReceived;
+		ResponseData responseDataReceived = AbstractPaceProtocol.getMutualAuthenticatePinManagementResponsePaceSuccessful(pwdaoWithPinRc1Activated, mockedCardStateAccessor);
 		
 		short expectedSw = Iso7816.SW_9000_NO_ERROR;
-		
-		responseDataReceived = Deencapsulation.invoke(paceProtocol, "getMutualAuthenticatePinManagementResponsePaceSuccessful");
 		short receivedSw = responseDataReceived.getStatusWord();
-		
 		assertEquals("Statusword is not " + HexString.hexifyShort(expectedSw), expectedSw, receivedSw);
+	}
+	
+
+	/**
+	 * Negative testcase: Perform PACE with Pin. Retry counter is 0, PIN activated
+	 */
+	@Test
+	public void testSetAtPinRc0Act_NoPrevPwd(){
+		// prepare the mock
+		new NonStrictExpectations() {
+			{
+				mockedCardStateAccessor.getCurrentMechanisms(
+						withInstanceOf(SecContext.class),
+						null);
+				result = csmEmpty;
+				
+				mockedCardStateAccessor.getMasterFile();
+				result = mockedMf;
+
+				mockedMf.findChildren(
+						withInstanceOf(DomainParameterSetIdentifier.class),
+						withInstanceOf(OidIdentifier.class));
+				result = domainParameters0;
+
+				mockedMf.findChildren(withInstanceOf(DomainParameterSetIdentifier.class));
+				result = domainParameters0;
+				
+				mockedMf.findChildren(withInstanceOf(AuthObjectIdentifier.class));
+				result = pwdaoWithPinRc0Activated;
+			}
+		};
+		
+		// select Apdu
+		ProcessingData processingData = new ProcessingData();
+		byte[] apduBytes = HexString.toByteArray("00 22 C1 A4 0F 80 0A 04 00 7F 00 07 02 02 04 02 02 83 01 03");
+		processingData.updateCommandApdu(this, "pseudo pace APDU",
+				CommandApduFactory.createCommandApdu(apduBytes));
+
+		// call mut
+		paceProtocol.process(processingData);
+
+		// check results
+		short sw = processingData.getResponseApdu().getStatusWord();
+		assertEquals("Statusword is not correct", HexString.hexifyShort(0x63C0), HexString.hexifyShort(sw));
 	}
 	
 }

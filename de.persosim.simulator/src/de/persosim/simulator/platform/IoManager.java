@@ -20,13 +20,11 @@ import de.persosim.simulator.utils.HexString;
  */
 public class IoManager extends Layer {
 	
-	public IoManager(int id) {
-		super(id);
-	}
-
+	public static final String IOMANAGER = "IoManager";
+	
 	@Override
 	public String getLayerName() {
-		return "IoManager";
+		return IOMANAGER;
 	}
 	
 	/*--------------------------------------------------------------------------------*/
@@ -57,4 +55,10 @@ public class IoManager extends Layer {
 		processingData.addUpdatePropagation(this, "Converted response APDU to hardware representation: "+ HexString.dump(responseApduPropagation.getResponseApdu()),
 				responseApduPropagation);
 	}
+
+	@Override
+	public void initializeForUse() {
+		// nothing to do here
+	}
+	
 }

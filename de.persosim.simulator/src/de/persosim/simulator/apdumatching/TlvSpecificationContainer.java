@@ -1,6 +1,6 @@
 package de.persosim.simulator.apdumatching;
 
-import static de.persosim.simulator.utils.PersoSimLogger.log;
+import static org.globaltester.logging.BasicLogger.log;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -9,7 +9,7 @@ import de.persosim.simulator.platform.Iso7816;
 import de.persosim.simulator.tlv.TlvDataObject;
 import de.persosim.simulator.tlv.TlvDataObjectContainer;
 import de.persosim.simulator.tlv.TlvPath;
-import de.persosim.simulator.tlv.TlvTag;
+import de.persosim.simulator.tlv.TlvTagIdentifier;
 
 /**
  * This class provides a container for specifications of TLV elements. Its
@@ -63,7 +63,7 @@ public class TlvSpecificationContainer extends ArrayList<TlvSpecification> imple
 			return;
 		} else{
 			TlvSpecification subTlvSpec;
-			int index = getFirstIndexOfSubTag(path.get(pathOffset));
+			int index = getIndexOfSubTag(path.get(pathOffset));
 			
 			if(index >= 0) {
 				subTlvSpec = get(index);
@@ -90,29 +90,31 @@ public class TlvSpecificationContainer extends ArrayList<TlvSpecification> imple
 	}
 	
 	/**
-	 * This method returns the first index of an occurrence of a tag matching
+	 * This method returns the index of an occurrence of a tag matching
 	 * the provided tag within the sub tags of this object. If no occurrence can
 	 * be found the returned index will be "-1".
 	 * 
-	 * @param tag
+	 * @param tlvTagIdentifier
 	 *            the tag to be matched for
 	 * @return the first occurrence of the provided tag
 	 */
-	public int getFirstIndexOfSubTag(TlvTag tag) {
-		if(tag == null) {throw new NullPointerException("tag must not be null");}
+	public int getIndexOfSubTag(TlvTagIdentifier tlvTagIdentifier) {
+		if(tlvTagIdentifier == null) {throw new NullPointerException("tag identifier must not be null");}
+		
+		int remainingOccurences = tlvTagIdentifier.getNoOfPreviousOccurrences();
 		
 		for(int i = 0; i < size(); i++) {
-			if(get(i).matches(tag)) {
-				return i;
+			if(get(i).matches(tlvTagIdentifier.getTag())) {
+				if (remainingOccurences == 0) {
+					return i;
+				} else {
+					remainingOccurences--;
+				}
 			}
 		}
 		
 		return -1;
 	}
-
-	
-	// XXX extract a common Interface for matching, with a consistent description of the matches() method, similar to Java.util.regex.matcher, in the end we are dcefining something very similar to Regex here  
-	// This should cover *TlvSpecification*.matches, as well as Tlv*.matches and ApduSpecification.matchesFullAPDU() 
 
 	
 	/**
@@ -134,7 +136,7 @@ public class TlvSpecificationContainer extends ArrayList<TlvSpecification> imple
 		while(tlvIterator.hasNext()) {
 			tlvDataObject = tlvIterator.next();
 			
-			currentWorkingIndex = this.getFirstIndexOfSubTag(tlvDataObject.getTlvTag());
+			currentWorkingIndex = this.getIndexOfSubTag(new TlvTagIdentifier(tlvDataObject.getTlvTag()));
 			
 			if(currentWorkingIndex < 0) {
 				if(!this.allowUnspecifiedSubTags) {
@@ -171,7 +173,6 @@ public class TlvSpecificationContainer extends ArrayList<TlvSpecification> imple
 			}
 		}
 		
-		// XXX why is a counter sufficient here? Shouldn't the algorithm iterate over the list of specifications instead of the input? Imagine a specification that should match A,B and an input A,A, this might also lead to a counter of 2 instead of a mismatch
 		diffCounter = this.getNoOfTagsMatchingRequirement(REQ_MATCH) - counter;
 		
 		if(diffCounter > 0) {

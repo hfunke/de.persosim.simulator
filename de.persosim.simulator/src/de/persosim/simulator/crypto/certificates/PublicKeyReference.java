@@ -2,7 +2,6 @@ package de.persosim.simulator.crypto.certificates;
 
 import java.util.Arrays;
 
-import javax.xml.bind.annotation.XmlAttribute;
 
 import de.persosim.simulator.exception.CarParameterInvalidException;
 import de.persosim.simulator.tlv.TlvDataObject;
@@ -19,19 +18,16 @@ public class PublicKeyReference {
 	/**
 	 * 2 characters long ISO 3166-1 ALPHA-2 encoded code
 	 */
-	@XmlAttribute
 	String countryCode = "";
 
 	/**
 	 * up to 9 characters long
 	 */
-	@XmlAttribute
 	String holderMnemonic = "";
 
 	/**
 	 * 5 characters long
 	 */
-	@XmlAttribute
 	String sequenceNumber = "";
 
 	public PublicKeyReference() {
@@ -127,6 +123,15 @@ public class PublicKeyReference {
 
 	@Override
 	public String toString() {
-		return "[" + getCountryCode() + "|" + getHolderMnemonic() + "|" + getSequenceNumber() +"]";
+		return toString("[", "|", "]");
 	}
+	
+	public String toUnformattedString() {
+		return toString("", "", "");
+	}
+	
+	public String toString(String deliminatorOpen, String separator, String deliminatorClose) {
+		return deliminatorOpen + getCountryCode() + separator + getHolderMnemonic() + separator + getSequenceNumber() + deliminatorClose;
+	}
+	
 }

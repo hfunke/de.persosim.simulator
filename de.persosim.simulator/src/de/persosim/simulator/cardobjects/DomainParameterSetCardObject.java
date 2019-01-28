@@ -3,15 +3,9 @@ package de.persosim.simulator.cardobjects;
 import java.util.ArrayList;
 import java.util.Collection;
 
-import javax.xml.bind.Marshaller;
-import javax.xml.bind.Unmarshaller;
-import javax.xml.bind.annotation.XmlAnyElement;
-import javax.xml.bind.annotation.XmlElement;
-import javax.xml.bind.annotation.XmlElementWrapper;
-import javax.xml.bind.annotation.XmlRootElement;
-
 import de.persosim.simulator.crypto.DomainParameterSet;
-import de.persosim.simulator.crypto.StandardizedDomainParameters;
+import de.persosim.simulator.exception.AccessDeniedException;
+import de.persosim.simulator.secstatus.SecStatus;
 
 /**
  * This object wraps domain parameters for storing them in the object store.
@@ -20,15 +14,10 @@ import de.persosim.simulator.crypto.StandardizedDomainParameters;
  * @author slutters
  *
  */
-@XmlRootElement(name="DomainParameterSet")
 public class DomainParameterSetCardObject extends AbstractCardObject {
 	
-	@XmlAnyElement(lax=true)
 	protected DomainParameterSet domainParameterSet;
-	@XmlElement(name="domainParameterId")
 	protected DomainParameterSetIdentifier primaryIdentifier;
-	@XmlElementWrapper(name="usage")
-	@XmlAnyElement(lax=true)
 	protected Collection<CardObjectIdentifier> furtherIdentifiers;
 	
 	public DomainParameterSetCardObject() {
@@ -43,9 +32,10 @@ public class DomainParameterSetCardObject extends AbstractCardObject {
 	
 	@Override
 	public Collection<CardObjectIdentifier> getAllIdentifiers() {
-		Collection<CardObjectIdentifier> allIdentifiers = new ArrayList<CardObjectIdentifier>(furtherIdentifiers);
-		allIdentifiers.add(primaryIdentifier);
-		return allIdentifiers;
+		Collection<CardObjectIdentifier> result = super.getAllIdentifiers();
+		result.add(primaryIdentifier);
+		result.addAll(furtherIdentifiers);
+		return result;
 	}
 
 	/**
@@ -61,41 +51,28 @@ public class DomainParameterSetCardObject extends AbstractCardObject {
 	public DomainParameterSetIdentifier getPrimaryIdentifier() {
 		return primaryIdentifier;
 	}
+	
+	/**
+	 * Remove the given OidIdentifier (if present) from the set of identifiers
+	 * @param oidIdentifier
+	 * 		
+	 * @throws AccessDeniedException
+	 */
+	public void removeOidIdentifier(OidIdentifier oidIdentifier) throws AccessDeniedException {
+		if (!SecStatus.checkAccessConditions(getLifeCycleState())){
+			throw new AccessDeniedException("Updating forbidden");
+		}
+		
+		furtherIdentifiers.remove(oidIdentifier);
+	}
 
 	public DomainParameterSet getDomainParameterSet() {
 		return domainParameterSet;
 	}
 	
-	/**
-	 * JAXB callback
-	 * <p/>
-	 * Used to serialize standardized domain parameters only using their id.
-	 * @param m
-	 */
-	protected void beforeMarshal(Marshaller m){
-		super.beforeMarshal(m);
-		
-		if ((primaryIdentifier != null)
-				&& (primaryIdentifier.getInteger() < StandardizedDomainParameters.NO_OF_STANDARDIZED_DOMAIN_PARAMETERS)) {
-			domainParameterSet = null;
-		}
-	}
-	
-	/**
-	 * JAXB callback
-	 * <p/>
-	 * Used to initialize standardized domain parameters if only the id is provided
-	 * @param u
-	 * @param parent
-	 */
-	protected void afterUnmarshal(Unmarshaller u, Object parent) {
-		super.afterUnmarshal(u, parent);
-		
-		if ((domainParameterSet == null)
-				&& (primaryIdentifier != null)
-				&& (primaryIdentifier.getInteger() <= StandardizedDomainParameters.NO_OF_STANDARDIZED_DOMAIN_PARAMETERS)) {
-			domainParameterSet = StandardizedDomainParameters.getDomainParameterSetById(primaryIdentifier.getInteger());
-		}
+	@Override
+	public String toString() {
+		return "domain parameter set " + primaryIdentifier.getDomainParameterId();
 	}
 
 }

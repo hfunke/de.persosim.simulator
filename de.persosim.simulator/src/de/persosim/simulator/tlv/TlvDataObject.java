@@ -1,12 +1,12 @@
 package de.persosim.simulator.tlv;
 
-import static de.persosim.simulator.utils.PersoSimLogger.DEBUG;
-import static de.persosim.simulator.utils.PersoSimLogger.logException;
+import static org.globaltester.logging.BasicLogger.logException;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Arrays;
 
+import org.globaltester.logging.tags.LogLevel;
 import de.persosim.simulator.exception.ISO7816Exception;
 import de.persosim.simulator.platform.Iso7816;
 
@@ -70,7 +70,7 @@ public abstract class TlvDataObject extends TlvElement implements Iso7816, Valid
 	protected TlvLength tlvLength;
 	
 	/* The value component will be set in the various sub classes */
-	//TODO define value field within this class, that reduces code duplication within subclasses (esp. constructor redundancy) and requires only a little caution when casting the valuefield within those subclasses
+	//IMPL define value field within this class, that reduces code duplication within subclasses (esp. constructor redundancy) and requires only a little caution when casting the valuefield within those subclasses
 	
 	protected boolean performValidityChecks;
 	
@@ -91,7 +91,7 @@ public abstract class TlvDataObject extends TlvElement implements Iso7816, Valid
 	 * @param maxOffset the first offset not to be part of the range to contain the TLV data object (exclusive).
 	 */
 	public TlvDataObject(byte[] dataField, int minOffset, int maxOffset) {
-		if(dataField == null) {throw new NullPointerException();}
+		if(dataField == null) {throw new IllegalArgumentException();}
 		if(minOffset < 0) {throw new IllegalArgumentException("min offset must not be less than 0");}
 		if(maxOffset < minOffset) {throw new IllegalArgumentException("max offset must not be smaller than min offset");}
 		if(maxOffset > dataField.length) {throw new IllegalArgumentException("selected array area must not lie outside of data array");}
@@ -109,7 +109,7 @@ public abstract class TlvDataObject extends TlvElement implements Iso7816, Valid
 		/*
 		 * Determine Length
 		 */
-		currentOffset += getNoOfTagBytes();
+		currentOffset += tlvTag.getLength();
 		tlvLength = new TlvLength(dataField, currentOffset, maxOffset);
 		
 		int indicatedLength = tlvLength.getIndicatedLength();
@@ -153,7 +153,7 @@ public abstract class TlvDataObject extends TlvElement implements Iso7816, Valid
 	 * @param performValidityChecksInput true: perform validity checks, false: do not perform validity checks
 	 */
 	public void setLength(TlvLength tlvLengthInput, boolean performValidityChecksInput) {
-		if(tlvLengthInput == null) {throw new NullPointerException("length must not be null");}
+		if(tlvLengthInput == null) {throw new IllegalArgumentException("length must not be null");}
 		
 		performValidityChecks = performValidityChecksInput;
 		
@@ -171,24 +171,6 @@ public abstract class TlvDataObject extends TlvElement implements Iso7816, Valid
 	 */
 	public void setLength(TlvLength tlvLengthInput) {
 		setLength(tlvLengthInput, PERFORM_VALIDITY_CHECKS);
-	}
-	
-	/*--------------------------------------------------------------------------------*/
-	
-	/**
-	 * Returns whether this TLV data object is primitive (bit 6 of first tag field == 0)
-	 * @return whether this TLV data object is primitive
-	 */
-	public boolean isPrimitiveTLVObject() {
-		return tlvTag.indicatesEncodingPrimitive();
-	}
-	
-	/**
-	 * Returns whether this TLV data object is constructed (bit 6 of first tag field == 1)
-	 * @return whether this TLV data object is constructed
-	 */
-	public boolean isConstructedTLVObject() {
-		return tlvTag.indicatesEncodingConstructed();
 	}
 	
 	/*--------------------------------------------------------------------------------*/
@@ -233,7 +215,7 @@ public abstract class TlvDataObject extends TlvElement implements Iso7816, Valid
 			/* value must be accessed by getter as values are only specified by sub classes */
 			outputStream.write(getTlvValue().toByteArray());
 		} catch (IOException e) {
-			logException(this.getClass(), e, DEBUG);
+			logException(this.getClass(), e, LogLevel.DEBUG);
 		}
 
 		return outputStream.toByteArray();
@@ -321,16 +303,14 @@ public abstract class TlvDataObject extends TlvElement implements Iso7816, Valid
 		if(!(getTlvTag().isValidBerEncoding() && getTlvLength().isValidBerEncoding() && getTlvValue().isValidBerEncoding())) {return false;}
 		
 		/* then encoded length must match actual length */
-		if(getTlvLength().getIndicatedLength() != getTlvValue().getLength()) {return false;}
-		
-		return true;
+		return getTlvLength().getIndicatedLength() == getTlvValue().getLength();
 	}
 	
 	@Override
 	public boolean isValidDerEncoding() {
 		if(!isValidBerEncoding()) {return false;}
 		
-		//TODO provide a negative testcase for this method that checks behavior for a mismatch between length encoded in getTlvLEngth() and actual length of value
+		//IMPL provide a negative testcase for this method that checks behavior for a mismatch between length encoded in getTlvLEngth() and actual length of value
 		return getTlvTag().isValidDerEncoding() && getTlvLength().isValidDerEncoding() && getTlvValue().isValidDerEncoding();
 	}
 	
@@ -377,7 +357,7 @@ public abstract class TlvDataObject extends TlvElement implements Iso7816, Valid
 	public boolean equals(Object anotherTlvDataObject) {
 		if(anotherTlvDataObject == null) {return false;}
 		
-		if (!(anotherTlvDataObject instanceof TlvDataObject)) {
+		if (getClass() != anotherTlvDataObject.getClass()) {
 			return false;
 		}
 		
@@ -399,4 +379,40 @@ public abstract class TlvDataObject extends TlvElement implements Iso7816, Valid
 		performValidityChecks = performValidityChecksInput;
 	}
 	
+	/**
+	 * Returns a neatly indented and line wrapped version of the provided {@link TlvDataObject}
+	 * @param obj
+	 */
+	public static String dumpTlvObject(TlvDataObject obj){
+		if (obj == null) return "";
+
+		String inputStr = obj.toString();
+		StringBuilder sb = new StringBuilder();
+		
+		String indent = "";
+		
+		for (int i = 0, n = inputStr.length(); i < n; i++) {
+		    char curChar = inputStr.charAt(i);
+		    switch (curChar) {
+			case '(':
+				indent += "    ";
+				break;
+			case ')':
+				indent = indent.substring(4);
+				break;
+			case '[':
+				sb.append("\n");
+				sb.append(indent);
+				break;
+			case ']':	
+				break;
+
+			default:
+				sb.append(curChar);
+				break;
+			}
+		}
+		
+		return sb.toString();
+	}
 }

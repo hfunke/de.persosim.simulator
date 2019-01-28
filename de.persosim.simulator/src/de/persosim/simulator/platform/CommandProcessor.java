@@ -1,11 +1,13 @@
 package de.persosim.simulator.platform;
 
 
-import de.persosim.simulator.cardobjects.CardFile;
-import de.persosim.simulator.cardobjects.ObjectStore;
-import de.persosim.simulator.perso.DefaultPersonalization;
+import java.util.List;
+
+import de.persosim.simulator.cardobjects.MasterFile;
+import de.persosim.simulator.exception.AccessDeniedException;
 import de.persosim.simulator.perso.Personalization;
 import de.persosim.simulator.protocols.Protocol;
+import de.persosim.simulator.secstatus.SecStatus;
 
 /**
  * This class realizes a generic means to provide a {@link Personalization} that
@@ -16,36 +18,15 @@ import de.persosim.simulator.protocols.Protocol;
  */
 public class CommandProcessor extends CommandProcessorStateMachine {
 
-	private Personalization perso;
-
-	public CommandProcessor(int id, Personalization newPerso) {
-		layerId = id;
-		perso = newPerso;
-	}
-
-	public CommandProcessor(int id) {
-		this(id, new DefaultPersonalization());
-	}
-
-	@Override
-	public void init() {
-		super.init();
-		
-		//create object tree
-		objectStore.reset(perso.getObjectTree(), securityStatus);
+	public CommandProcessor(List<Protocol> protocolList, MasterFile mf) throws AccessDeniedException {
+		//initialize object tree with SecStatus
+		this.masterFile = mf;
+		this.securityStatus = new SecStatus();
+		masterFile.setSecStatus(securityStatus);
 		
 		//register protocols
-		for (Protocol curProtocol : perso.getProtocolList()) {
+		for (Protocol curProtocol : protocolList) {
 			addProtocol(curProtocol);
 		}
-		
-	}
-
-	/**
-	 * @see ObjectStore#selectFileForPersonalization(CardFile)
-	 */
-	@Override
-	public void selectFileForPersonalization(CardFile file) {
-		objectStore.selectFileForPersonalization(file);
 	}
 }

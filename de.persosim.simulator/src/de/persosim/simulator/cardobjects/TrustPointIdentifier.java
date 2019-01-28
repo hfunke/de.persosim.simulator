@@ -1,7 +1,5 @@
 package de.persosim.simulator.cardobjects;
 
-import javax.xml.bind.annotation.XmlElement;
-import javax.xml.bind.annotation.XmlRootElement;
 
 import de.persosim.simulator.protocols.ta.TerminalType;
 
@@ -12,10 +10,8 @@ import de.persosim.simulator.protocols.ta.TerminalType;
  * @author mboonk
  * 
  */
-@XmlRootElement
 public class TrustPointIdentifier extends AbstractCardObjectIdentifier {
 
-	@XmlElement
 	TerminalType terminalType;
 
 	public TrustPointIdentifier() {
@@ -25,22 +21,33 @@ public class TrustPointIdentifier extends AbstractCardObjectIdentifier {
 		this.terminalType = terminalType;
 	}
 
-	@Override
-	public boolean matches(CardObjectIdentifier obj) {
-		if (obj instanceof TrustPointIdentifier) {
-			if (((TrustPointIdentifier) obj).getTerminalType().equals(
-					terminalType)) {
-				return true;
-			}
-		}
-		return false;
-	}
-
 	/**
 	 * @return the terminal type used in this identifier
 	 */
 	public TerminalType getTerminalType() {
 		return terminalType;
+	}
+
+	@Override
+	public int hashCode() {
+		final int prime = 31;
+		int result = 1;
+		result = prime * result + ((terminalType == null) ? 0 : terminalType.hashCode());
+		return result;
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (obj == null)
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		TrustPointIdentifier other = (TrustPointIdentifier) obj;
+		if (terminalType != other.terminalType)
+			return false;
+		return true;
 	}
 
 }

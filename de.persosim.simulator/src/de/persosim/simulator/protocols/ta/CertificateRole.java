@@ -30,12 +30,13 @@ import de.persosim.simulator.utils.BitField;
  * 
  */
 public enum CertificateRole {
-	CVCA(new BitField(2, new byte[] { 0b11 })), DV_TYPE_1(new BitField(2,
-			new byte[] { 0b01 })), DV_TYPE_2(new BitField(2,
-			new byte[] { 0b10 })), TERMINAL(
-			new BitField(2, new byte[] { 0b00 }));
+	CVCA(new BitField(2, new byte[] { 0b11 }), true), DV_TYPE_1(new BitField(2,
+			new byte[] { 0b10 }), false), DV_TYPE_2(new BitField(2,
+			new byte[] { 0b01 }), false), TERMINAL(
+			new BitField(2, new byte[] { 0b00 }), false);
 
 	private BitField value;
+	private boolean includeConditionalElementsInKeyEncoding;
 
 	/**
 	 * Parse a {@link BitField} and return the fitting {@link CertificateRole}.
@@ -75,9 +76,22 @@ public enum CertificateRole {
 		}
 		return null;
 	}
+	
+	/**
+	 * Parse a {@link BitField} for a {@link CertificateRole}.
+	 * 
+	 * @param field
+	 *            the {@link BitField} to parse
+	 * @return the {@link CertificateRole} as defined in the two MSB
+	 */
+	public static CertificateRole getFromMostSignificantBits(BitField field) {
+		BitField role = new BitField(new boolean [] { field.getBit(field.getNumberOfBits()-2),  field.getBit(field.getNumberOfBits()-1) });
+		return CertificateRole.getFromField(role);
+	}
 
-	CertificateRole(BitField value) {
+	CertificateRole(BitField value, boolean includeConditionalElementsInKeyEncoding) {
 		this.value = value;
+		this.includeConditionalElementsInKeyEncoding = includeConditionalElementsInKeyEncoding;
 	}
 
 	/**
@@ -87,4 +101,9 @@ public enum CertificateRole {
 	public BitField getField() {
 		return value;
 	}
+
+	public boolean includeConditionalElementsInKeyEncoding() {
+		return includeConditionalElementsInKeyEncoding;
+	}
+	
 }

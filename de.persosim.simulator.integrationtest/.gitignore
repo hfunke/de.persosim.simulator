@@ -1,0 +1,8 @@
+/bin
+/target
+/logs
+/target
+/coverage-report
+/tmp
+/opencard.properties
+/socket.log

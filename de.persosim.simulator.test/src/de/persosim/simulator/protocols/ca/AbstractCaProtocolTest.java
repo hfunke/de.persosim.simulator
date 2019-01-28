@@ -9,50 +9,54 @@ import java.security.interfaces.ECPrivateKey;
 import java.security.interfaces.ECPublicKey;
 import java.util.ArrayList;
 import java.util.Collection;
-
 import javax.crypto.spec.SecretKeySpec;
-
-import mockit.Deencapsulation;
-import mockit.Delegate;
-import mockit.Expectations;
-import mockit.Mocked;
-import mockit.NonStrictExpectations;
 
 import org.junit.Before;
 import org.junit.Test;
 
 import de.persosim.simulator.apdu.CommandApdu;
 import de.persosim.simulator.apdu.CommandApduFactory;
+import de.persosim.simulator.apdu.InterindustryCommandApduImpl;
 import de.persosim.simulator.cardobjects.CardObject;
 import de.persosim.simulator.cardobjects.KeyIdentifier;
-import de.persosim.simulator.cardobjects.KeyObject;
+import de.persosim.simulator.cardobjects.KeyPairObject;
 import de.persosim.simulator.cardobjects.MasterFile;
-import de.persosim.simulator.cardobjects.MasterFileIdentifier;
-import de.persosim.simulator.cardobjects.NullCardObject;
 import de.persosim.simulator.cardobjects.OidIdentifier;
 import de.persosim.simulator.cardobjects.PasswordAuthObject;
-import de.persosim.simulator.cardobjects.Scope;
 import de.persosim.simulator.crypto.CryptoUtil;
 import de.persosim.simulator.crypto.DomainParameterSetEcdh;
 import de.persosim.simulator.crypto.StandardizedDomainParameters;
+import de.persosim.simulator.exception.ProcessingException;
 import de.persosim.simulator.platform.CardStateAccessor;
 import de.persosim.simulator.platform.Iso7816;
+import de.persosim.simulator.platform.PlatformUtil;
 import de.persosim.simulator.processing.ProcessingData;
-import de.persosim.simulator.protocols.TR03110;
+import de.persosim.simulator.protocols.Tr03110Utils;
 import de.persosim.simulator.protocols.ta.TerminalAuthenticationMechanism;
 import de.persosim.simulator.secstatus.SecStatus;
 import de.persosim.simulator.secstatus.SecStatus.SecContext;
 import de.persosim.simulator.test.PersoSimTestCase;
 import de.persosim.simulator.tlv.ConstructedTlvDataObject;
 import de.persosim.simulator.tlv.TlvDataObject;
+import de.persosim.simulator.tlv.TlvDataObjectContainer;
 import de.persosim.simulator.utils.HexString;
 import de.persosim.simulator.utils.Utils;
+import mockit.Deencapsulation;
+import mockit.Delegate;
+import mockit.Expectations;
+import mockit.Mocked;
+import mockit.NonStrictExpectations;
 
 /**
  * @author slutters
  *
  */
 public class AbstractCaProtocolTest extends PersoSimTestCase {
+	protected static byte[] COMMAND_DATA_IMPL_KEY_SELECTION = HexString.toByteArray("80 0A 04 00 7F 00 07 02 02 03 02 02");
+	protected static byte[] COMMAND_DATA_EXPL_KEY_SELECTION = HexString.toByteArray("80 0A 04 00 7F 00 07 02 02 03 02 02 84 01 02");
+	protected static TlvDataObjectContainer TLV_COMMAND_DATA_IMPL_KEY_SELECTION = new TlvDataObjectContainer(COMMAND_DATA_IMPL_KEY_SELECTION);
+	protected static TlvDataObjectContainer TLV_COMMAND_DATA_EXPL_KEY_SELECTION = new TlvDataObjectContainer(COMMAND_DATA_EXPL_KEY_SELECTION);
+	
 	private DefaultCaProtocol caProtocol;
 	@Mocked
 	CardStateAccessor mockedCardStateAccessor;
@@ -72,7 +76,7 @@ public class AbstractCaProtocolTest extends PersoSimTestCase {
 	ECPrivateKey ecdhPrivateKeyPicc;
 	KeyPair ecdhKeyPairPicc;
 	Collection<CardObject> ecdhKeys, emptyKeySet;
-	KeyObject ecdhKeyObject;
+	KeyPairObject ecdhKeyObject;
 	@Mocked
 	TerminalAuthenticationMechanism taMechanism;
 	Collection<TerminalAuthenticationMechanism> taMechanismCollection;
@@ -113,7 +117,7 @@ public class AbstractCaProtocolTest extends PersoSimTestCase {
 		ecdhKeys = new ArrayList<CardObject>();
 		KeyIdentifier KeyIdentifier = new KeyIdentifier(2);
 		OidIdentifier oidIdentifier = new OidIdentifier(Ca.OID_id_CA_ECDH_AES_CBC_CMAC_128);
-		ecdhKeyObject = new KeyObject(ecdhKeyPairPicc, KeyIdentifier);
+		ecdhKeyObject = new KeyPairObject(ecdhKeyPairPicc, KeyIdentifier);
 		ecdhKeyObject.addOidIdentifier(oidIdentifier);
 		ecdhKeys.add(ecdhKeyObject);
 		
@@ -124,6 +128,57 @@ public class AbstractCaProtocolTest extends PersoSimTestCase {
 	}
 	
 	/**
+	 * Positive test case: extract key identifier from command data, implicit domain parameter set reference (Tag 84 is missing).
+	 */
+	@Test
+	public void testExtractKeyIdentifierFromCommandData_ImplicitDomainParameterReference(){
+		CaProtocol caProtocol = new CaProtocol();
+		KeyIdentifier keyIdentifierReceived = caProtocol.extractKeyIdentifierFromCommandData(TLV_COMMAND_DATA_IMPL_KEY_SELECTION);
+		KeyIdentifier keyIdentifierExpected = new KeyIdentifier();
+		
+		assertEquals(keyIdentifierExpected.getInteger(), keyIdentifierReceived.getInteger());
+	}
+	
+	/**
+	 * Positive test case: extract key identifier from command data, explicit domain parameter set reference (Tag 84 is present).
+	 */
+	@Test
+	public void testExtractKeyIdentifierFromCommandData_ExplicitDomainParameterReference(){
+		CaProtocol caProtocol = new CaProtocol();
+		KeyIdentifier keyIdentifierReceived = caProtocol.extractKeyIdentifierFromCommandData(TLV_COMMAND_DATA_EXPL_KEY_SELECTION);
+		KeyIdentifier keyIdentifierExpected = new KeyIdentifier(2);
+		
+		assertEquals(keyIdentifierExpected.getInteger(), keyIdentifierReceived.getInteger());
+	}
+	
+	/**
+	 * Positive test case: extract CA OID from command data.
+	 */
+	@Test
+	public void testExtractCaOidFromCommandData(){
+		CaProtocol caProtocol = new CaProtocol();
+		
+		CaOid caOidReceived = caProtocol.extractCaOidFromCommandData(TLV_COMMAND_DATA_IMPL_KEY_SELECTION);
+		byte[] caOidData = HexString.toByteArray("04 00 7F 00 07 02 02 03 02 02");
+		CaOid caOidExpected = new CaOid(caOidData);
+		
+		assertEquals(caOidExpected, caOidReceived);
+	}
+	
+	/**
+	 * Negative test case: extract CA OID from command data containing an invalid CA OID.
+	 */
+	@Test(expected = ProcessingException.class)
+	public void testExtractCaOidFromCommandData_illegalCaOid(){
+		CaProtocol caProtocol = new CaProtocol();
+		
+		byte[] commandDataBytes = HexString.toByteArray("80 0A 04 00 7F 00 07 02 02 03 FF FF");
+		TlvDataObjectContainer commandData = new TlvDataObjectContainer(commandDataBytes); 
+		
+		caProtocol.extractCaOidFromCommandData(commandData);
+	}
+	
+	/**
 	 * Positive test case: perform Set AT command with data from valid CA test run, explicit key reference (Tag 84 is present).
 	 */
 	@Test
@@ -131,20 +186,12 @@ public class AbstractCaProtocolTest extends PersoSimTestCase {
 		// prepare the mock
 		new NonStrictExpectations() {
 			{
-				mockedCardStateAccessor.getObject(
-						withInstanceOf(MasterFileIdentifier.class),
-						withInstanceOf(Scope.class));
+				mockedCardStateAccessor.getMasterFile();
 				result = mockedMf;
 				
 				mockedMf.findChildren(
-						withInstanceOf(KeyIdentifier.class),
-						withInstanceOf(OidIdentifier.class));
+						withInstanceOf(KeyIdentifier.class));
 				result = ecdhKeys;
-				
-				mockedCardStateAccessor.getObject(
-						withInstanceOf(KeyIdentifier.class),
-						withInstanceOf(Scope.class));
-				result = ecdhKeyObject;
 			}
 		};
 		
@@ -167,9 +214,7 @@ public class AbstractCaProtocolTest extends PersoSimTestCase {
 		// prepare the mock
 		new NonStrictExpectations() {
 			{
-				mockedCardStateAccessor.getObject(
-						withInstanceOf(MasterFileIdentifier.class),
-						withInstanceOf(Scope.class));
+				mockedCardStateAccessor.getMasterFile();
 				result = mockedMf;
 
 				mockedMf.findChildren(
@@ -177,10 +222,10 @@ public class AbstractCaProtocolTest extends PersoSimTestCase {
 						withInstanceOf(KeyIdentifier.class));
 				result = ecdhKeys;
 
-				mockedCardStateAccessor.getObject(
-						withInstanceOf(KeyIdentifier.class),
-						withInstanceOf(Scope.class));
-				result = new NullCardObject();
+//				mockedCardStateAccessor.getObject(
+//						withInstanceOf(KeyIdentifier.class),
+//						withInstanceOf(Scope.class));
+//				result = new NullCardObject();
 			}
 		};
 		
@@ -192,7 +237,7 @@ public class AbstractCaProtocolTest extends PersoSimTestCase {
 		caProtocol.process(processingData);
 
 		// check results
-		assertEquals("Statusword is not 6A88", Iso7816.SW_6A88_REFERENCE_DATA_NOT_FOUND, processingData.getResponseApdu().getStatusWord());
+		assertEquals("Statusword is not 4A88", PlatformUtil.SW_4A88_REFERENCE_DATA_NOT_FOUND, processingData.getResponseApdu().getStatusWord());
 	}
 	
 	/**
@@ -203,18 +248,17 @@ public class AbstractCaProtocolTest extends PersoSimTestCase {
 		// prepare the mock
 		new NonStrictExpectations() {
 			{
-				mockedCardStateAccessor.getObject(withInstanceOf(MasterFileIdentifier.class), Scope.FROM_MF);
+				mockedCardStateAccessor.getMasterFile();
 				result = mockedMf;
 
 				mockedMf.findChildren(
-						withInstanceOf(KeyIdentifier.class),
-						withInstanceOf(OidIdentifier.class));
+						withInstanceOf(KeyIdentifier.class));
 				result = ecdhKeys;
 
-				mockedCardStateAccessor.getObject(
-						withInstanceOf(KeyIdentifier.class),
-						withInstanceOf(Scope.class));
-				result = ecdhKeyObject;
+//				mockedCardStateAccessor.getObject(
+//						withInstanceOf(KeyIdentifier.class),
+//						withInstanceOf(Scope.class));
+//				result = ecdhKeyObject;
 			}
 		};
 		
@@ -237,7 +281,7 @@ public class AbstractCaProtocolTest extends PersoSimTestCase {
 		// prepare the mock
 		new Expectations() {
 			{
-				mockedCardStateAccessor.getObject(withInstanceOf(MasterFileIdentifier.class), Scope.FROM_MF);
+				mockedCardStateAccessor.getMasterFile();
 				result = mockedMf;
 			}
 		};
@@ -245,8 +289,7 @@ public class AbstractCaProtocolTest extends PersoSimTestCase {
 		new Expectations() {
 			{
 				mockedMf.findChildren(
-						withInstanceOf(KeyIdentifier.class),
-						withInstanceOf(OidIdentifier.class));
+						withInstanceOf(KeyIdentifier.class));
 				result = emptyKeySet;
 			}
 		};
@@ -259,7 +302,7 @@ public class AbstractCaProtocolTest extends PersoSimTestCase {
 		caProtocol.process(processingData);
 
 		// check results
-		assertEquals("Statusword is not 6A88", Iso7816.SW_6A88_REFERENCE_DATA_NOT_FOUND, processingData.getResponseApdu().getStatusWord());
+		assertEquals("Statusword is not 4A88", PlatformUtil.SW_4A88_REFERENCE_DATA_NOT_FOUND, processingData.getResponseApdu().getStatusWord());
 	}
 	
 	/**
@@ -301,8 +344,8 @@ public class AbstractCaProtocolTest extends PersoSimTestCase {
 		};
 		
 		caProtocol.caOid = Ca.OID_id_CA_ECDH_AES_CBC_CMAC_128;
-		Deencapsulation.setField(caProtocol, ecdhKeyPairPicc);
-		caProtocol.caDomainParameters = TR03110.getDomainParameterSetFromKey(caProtocol.staticKeyPairPicc.getPublic());
+		Deencapsulation.setField(caProtocol, "staticKeyPairPicc", ecdhKeyPairPicc);
+		caProtocol.caDomainParameters = Tr03110Utils.getDomainParameterSetFromKey(caProtocol.staticKeyPairPicc.getPublic());
 		caProtocol.cryptoSupport = caProtocol.caOid.getCryptoSupport();
 		
 		ProcessingData processingData = new ProcessingData();
@@ -329,4 +372,123 @@ public class AbstractCaProtocolTest extends PersoSimTestCase {
 		assertArrayEquals("key spec ENC mismatch", ecdhKeySpecEnc, secretKeySpecEncKeyMaterial);
 		assertArrayEquals("key spec MAC mismatch", ecdhKeySpecMac, secretKeySpecMacKeyMaterial);
 	}
+	
+	/**
+	 * Positive test case: construct a ChipAuthenticationInfo object
+	 */
+	@Test
+	public void testConstructChipAuthenticationInfoObject(){
+		byte[] oidBytes = HexString.toByteArray("010203040506070809");
+		byte version = (byte) 0x01;
+		byte keyId = (byte) 0x42;
+		
+		ConstructedTlvDataObject caioReceivedTlv = CaSecInfoHelper.constructChipAuthenticationInfoObject(oidBytes, version, keyId);
+		byte[] caioReceived = caioReceivedTlv.toByteArray();
+		byte[] caioExpected = HexString.toByteArray("30110609010203040506070809020101020142");
+		
+		assertArrayEquals(caioExpected, caioReceived);
+	}
+	
+	/**
+	 * Positive test case: perform Set AT command with attached Tag for storing session context
+	 */
+	@Test
+	public void testSetAt_ExplicitStoreSession(){
+		// prepare the mock
+		new NonStrictExpectations() {
+			{
+				mockedCardStateAccessor.getMasterFile();
+				result = mockedMf;
+				
+				mockedMf.findChildren(
+						withInstanceOf(KeyIdentifier.class));
+				result = ecdhKeys;
+			}
+		};
+		
+		ProcessingData processingData = new ProcessingData();
+		byte[] apduBytes = HexString.toByteArray("00 22 41 A4 14 80 0A 04 00 7F 00 07 02 02 03 02 02 84 01 02 E0 03 81 01 01");
+		processingData.updateCommandApdu(this, "setAT APDU", CommandApduFactory.createCommandApdu(apduBytes));
+
+		// call mut
+		caProtocol.process(processingData);
+		
+		assertEquals(caProtocol.sessionContextIdentifier, 1);
+		
+		// check results
+		assertEquals("Statusword is not 9000", Iso7816.SW_9000_NO_ERROR, processingData.getResponseApdu().getStatusWord());
+	}
+	
+	/**
+	 * Positive test case: perform Set AT command without attached Tag for storing session context
+	 */
+	@Test
+	public void testSetAt_WihtoutStore(){
+		// prepare the mock
+		new NonStrictExpectations() {
+			{
+				mockedCardStateAccessor.getMasterFile();
+				result = mockedMf;
+				
+				mockedMf.findChildren(
+						withInstanceOf(KeyIdentifier.class));
+				result = ecdhKeys;
+			}
+		};
+		
+		ProcessingData processingData = new ProcessingData();
+		byte[] apduBytes = HexString.toByteArray("00 22 41 A4 0F 80 0A 04 00 7F 00 07 02 02 03 02 02 84 01 02");
+		processingData.updateCommandApdu(this, "setAT APDU", CommandApduFactory.createCommandApdu(apduBytes));
+
+		// call mut
+		caProtocol.process(processingData);
+		
+		assertEquals(caProtocol.sessionContextIdentifier, -1);
+		
+		// check results
+		assertEquals("Statusword is not 9000", Iso7816.SW_9000_NO_ERROR, processingData.getResponseApdu().getStatusWord());
+	}
+	
+	/**
+	 * Positive test case: perform 2 Set AT commands. The first with attached Tag for storing session context and the second without.
+	 */
+	@Test
+	public void testSetAt_ExplicitStore_WithoutStore(){
+		// prepare the mock
+		new NonStrictExpectations() {
+			{
+				mockedCardStateAccessor.getMasterFile();
+				result = mockedMf;
+				
+				mockedMf.findChildren(
+						withInstanceOf(KeyIdentifier.class));
+				result = ecdhKeys;
+			}
+		};
+		
+		ProcessingData processingData = new ProcessingData();
+		
+		byte[] apduBytesStore = HexString.toByteArray("00 22 41 A4 14 80 0A 04 00 7F 00 07 02 02 03 02 02 84 01 02 E0 03 81 01 01");
+		InterindustryCommandApduImpl cApduStore = (InterindustryCommandApduImpl) CommandApduFactory.createCommandApdu(apduBytesStore);
+		processingData.updateCommandApdu(this, "setAT APDU", cApduStore);
+		
+		caProtocol.process(processingData);
+		assertEquals(caProtocol.sessionContextIdentifier, 1);
+				
+		caProtocol = new DefaultCaProtocol();
+		caProtocol.setCardStateAccessor(mockedCardStateAccessor);
+		caProtocol.init();
+		
+		byte[] apduBytesNoStore = HexString.toByteArray("00 22 41 A4 0F 80 0A 04 00 7F 00 07 02 02 03 02 02 84 01 02");
+		InterindustryCommandApduImpl cApduNoStore = (InterindustryCommandApduImpl) CommandApduFactory.createCommandApdu(apduBytesNoStore, cApduStore);
+		processingData.updateCommandApdu(this, "setAT APDU", cApduNoStore);
+
+		// call mut
+		caProtocol.process(processingData);
+		assertEquals(-1, caProtocol.sessionContextIdentifier);
+		
+		// check results
+		assertEquals("Statusword is not 9000", Iso7816.SW_9000_NO_ERROR, processingData.getResponseApdu().getStatusWord());
+	}
+	
 }

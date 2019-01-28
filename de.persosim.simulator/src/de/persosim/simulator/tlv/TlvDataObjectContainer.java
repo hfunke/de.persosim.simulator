@@ -1,14 +1,15 @@
 package de.persosim.simulator.tlv;
 
-import static de.persosim.simulator.utils.PersoSimLogger.logException;
+import static org.globaltester.logging.BasicLogger.logException;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Vector;
+import java.util.function.Predicate;
 
 import de.persosim.simulator.platform.Iso7816;
 
@@ -29,7 +30,7 @@ import de.persosim.simulator.platform.Iso7816;
  */
 public class TlvDataObjectContainer extends TlvValue implements Iso7816, TlvDataStructure {
 	
-	protected Vector<TlvDataObject> tlvObjects;
+	protected List<TlvDataObject> tlvObjects;
 	
 	/*--------------------------------------------------------------------------------*/
 	
@@ -40,7 +41,7 @@ public class TlvDataObjectContainer extends TlvValue implements Iso7816, TlvData
 	 * this TLV structure although the structure is empty.
 	 */
 	public TlvDataObjectContainer() {
-		this.tlvObjects = new Vector<TlvDataObject>();
+		this.tlvObjects = new ArrayList<>();
 	}
 	
 	/**
@@ -50,12 +51,12 @@ public class TlvDataObjectContainer extends TlvValue implements Iso7816, TlvData
 	 * @param maxOffset the last offset to be used (exclusive)
 	 */
 	public TlvDataObjectContainer(byte[] dataField, int minOffset, int maxOffset) {
-		if(dataField == null) {throw new NullPointerException();}
+		if(dataField == null) {throw new IllegalArgumentException("dataField must not be null");}
 		if(minOffset < 0) {throw new IllegalArgumentException("min offset must not be less than 0");}
 		if(maxOffset < minOffset) {throw new IllegalArgumentException("max offset must not be smaller than min offset");}
 		if(maxOffset > dataField.length) {throw new IllegalArgumentException("selected array area must not lie outside of data array");}
 		
-		this.tlvObjects = new Vector<TlvDataObject>();
+		this.tlvObjects = new ArrayList<>();
 		
 		if(minOffset == maxOffset) {
 			/* The TLV data object container is empty */
@@ -94,7 +95,7 @@ public class TlvDataObjectContainer extends TlvValue implements Iso7816, TlvData
 	 * Constructs an object only containing the provided object
 	 * @param tlvDataObject the object to contain
 	 */
-	public TlvDataObjectContainer(TlvDataObject tlvDataObject) {
+	public TlvDataObjectContainer(TlvDataObject... tlvDataObject) {
 		this();
 		this.addTlvDataObject(tlvDataObject);
 	}
@@ -107,30 +108,74 @@ public class TlvDataObjectContainer extends TlvValue implements Iso7816, TlvData
 	public TlvDataObjectContainer(TlvValue tlvValue) {
 		this(tlvValue.toByteArray(), 0, tlvValue.getLength());
 	}
-	
+
+	@Override
+	public int hashCode() {
+		final int prime = 31;
+		int result = 1;
+		result = prime * result + ((tlvObjects == null) ? 0 : tlvObjects.hashCode());
+		return result;
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (obj == null)
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		TlvDataObjectContainer other = (TlvDataObjectContainer) obj;
+		if (tlvObjects == null) {
+			if (other.tlvObjects != null)
+				return false;
+		} else if (!tlvObjects.equals(other.tlvObjects))
+			return false;
+		return true;
+	}
+
 	/*--------------------------------------------------------------------------------*/
 
 	
 	@Override
-	public TlvDataObject getTagField(TlvPath path, int index) {
-		TlvTag currentTlvTag;
-		
-		if((path == null) || (path.size() == 0)) {throw new NullPointerException();}
+	public TlvDataObject getTlvDataObject(TlvPath path, int index) {
+		if((path == null) || path.isEmpty()) {throw new IllegalArgumentException("path must neither be null nor empty");}
 		if((index < 0) || (index >= path.size())) {throw new IllegalArgumentException("index must not be outside of path");}
 		
-		currentTlvTag = path.get(index);
-		if(currentTlvTag == null) {throw new NullPointerException();}
+		
+		//find indicated child
+		TlvDataObject indicatedChild = getTlvDataObject(path.get(index));
+		
+		if (indicatedChild == null) {
+			return null;
+		}
+		
+		if(index == (path.size() - 1)) {
+			return indicatedChild;
+		} else if(indicatedChild instanceof ConstructedTlvDataObject) {
+			return ((ConstructedTlvDataObject) indicatedChild).getTlvDataObject(path, index + 1);
+		} else{
+			return null;
+		}
+		
+	}
+	
+	@Override
+	public TlvDataObject getTlvDataObject(TlvPath path) {
+		return this.getTlvDataObject(path, 0);
+	}
+	
+	@Override
+	public TlvDataObject getTlvDataObject(TlvTagIdentifier tagIdentifier) {
+		if(tagIdentifier == null) {throw new IllegalArgumentException("tag must not be null");}
+		int remainingOccurences = tagIdentifier.getNoOfPreviousOccurrences();
 		
 		for(TlvDataObject tlvDataObject : this.tlvObjects) {
-			if(tlvDataObject.getTlvTag().matches(currentTlvTag)) {
-				if(index == (path.size() - 1)) {
+			if(tlvDataObject.getTlvTag().equals(tagIdentifier.getTag())) {
+				if (remainingOccurences == 0) {
 					return tlvDataObject;
-				} else{
-					if(tlvDataObject.isConstructedTLVObject()) {
-						return ((ConstructedTlvDataObject) tlvDataObject).getTagField(path, index + 1);
-					} else{
-						return null;
-					}
+				} else {
+					remainingOccurences--;
 				}
 			}
 		}
@@ -139,41 +184,22 @@ public class TlvDataObjectContainer extends TlvValue implements Iso7816, TlvData
 	}
 	
 	@Override
-	public TlvDataObject getTagField(TlvPath path) {
-		return this.getTagField(path, 0);
+	public TlvDataObject getTlvDataObject(TlvTag tlvTag) {
+		return getTlvDataObject(new TlvTagIdentifier(tlvTag));
 	}
 	
 	@Override
-	public TlvDataObject getTagField(TlvTag tlvTag) {
-		if(tlvTag == null) {throw new NullPointerException("tag must not be null");}
-		
-		for(TlvDataObject tlvDataObject : this.tlvObjects) {
-			if(tlvDataObject.getTlvTag().equals(tlvTag)) {
-				return tlvDataObject;
-			}
-		}
-		
-		return null;
-	}
-	
-	@Override
-	public boolean containsTagField(TlvTag tagField) {
-		return this.getTagField(tagField) != null;
+	public boolean containsTlvDataObject(TlvTag tagField) {
+		return this.getTlvDataObject(tagField) != null;
 	}
 	
 	@Override
 	public int getNoOfElements(boolean recursive) {
-		int noOfElements;
-		
-		if(this.tlvObjects == null) {
-			throw new NullPointerException();
-		}
-		
-		noOfElements = this.tlvObjects.size();
+		int noOfElements = this.tlvObjects.size();
 		
 		if(recursive) {
 			for(TlvDataObject tlvDataObject : this.tlvObjects) {
-				if(tlvDataObject.isConstructedTLVObject()) {
+				if(tlvDataObject instanceof ConstructedTlvDataObject) {
 					noOfElements += ((ConstructedTlvDataObject) tlvDataObject).getNoOfElements(recursive);
 				}
 			}
@@ -229,55 +255,55 @@ public class TlvDataObjectContainer extends TlvValue implements Iso7816, TlvData
 	
 	@Override
 	public void addTlvDataObject(TlvPath path, TlvDataObject tlvDataObject) {
-		TlvDataObject supposedParent;
-		ConstructedTlvDataObject actualParent;
+		TlvDataObject supposedParent = getTlvDataObject(path);
 		
-		supposedParent = this.getTagField(path);
-		
-		if((supposedParent != null) && (supposedParent.isConstructedTLVObject())) {
-			actualParent = (ConstructedTlvDataObject) supposedParent;
+		if((supposedParent != null) && (supposedParent instanceof ConstructedTlvDataObject)) {
+			ConstructedTlvDataObject actualParent = (ConstructedTlvDataObject) supposedParent;
 			actualParent.addTlvDataObject(tlvDataObject);
 		}
 	}
 	
 	@Override
-	public void addTlvDataObject(TlvDataObject tlvDataObject) {
-		if(tlvDataObject == null) {throw new NullPointerException("tlvDataObject object must not be null");}
-		this.tlvObjects.add(tlvDataObject);
+	public void addTlvDataObject(TlvDataObject... tlvDataObject) {
+		for (int i = 0; i < tlvDataObject.length; i++) {
+			this.tlvObjects.add(tlvDataObject[i]);	
+		}
 	}
 	
 	@Override
 	public void removeTlvDataObject(TlvPath path) {
-		if(path == null) {throw new NullPointerException("path must not be null");};
-		if(path.size() < 1) {throw new IllegalArgumentException("path must not be empty");};
-		
-		TlvTag tagToBeRemoved = path.getLastElement();
+		if((path == null) || path.isEmpty()) {throw new IllegalArgumentException("path must neither be null nor empty");}
 		
 		if(path.size() == 1) {
-			removeTlvDataObject(tagToBeRemoved);
+			removeTlvDataObject(path.get(0));
 		} else{
-			TlvPath pathToParent = path.clone();
-			pathToParent.remove(pathToParent.size() - 1);
+			TlvPath subPath = path.clone();
+			subPath.remove(0);
 			
-			TlvDataObject supposedParent = this.getTagField(pathToParent);
-			
-			if((supposedParent != null) && (supposedParent.isConstructedTLVObject())) {
-				ConstructedTlvDataObject actualParent = (ConstructedTlvDataObject) supposedParent;
-				actualParent.removeTlvDataObject(tagToBeRemoved);
+			TlvDataObject supposedParent = getTlvDataObject(path.get(0));
+			if((supposedParent != null) && (supposedParent instanceof ConstructedTlvDataObject)) {
+				((ConstructedTlvDataObject) supposedParent).removeTlvDataObject(subPath);
 			}
 		}
 	}
 	
 	@Override
-	public void removeTlvDataObject(TlvTag tlvTag) {
-		TlvDataObject tlvDataObject;
+	public void removeTlvDataObject(TlvTagIdentifier tagIdentifier) {
+		TlvDataObject objToRemove = getTlvDataObject(tagIdentifier);
 		
-		for(int i = 0; i < this.tlvObjects.size(); i++) {
-			tlvDataObject = this.tlvObjects.get(i);
-			if(tlvDataObject.matches(tlvTag)) {
-				this.tlvObjects.remove(i);
+		tlvObjects.removeIf(new Predicate<TlvDataObject>() {
+
+			@Override
+			public boolean test(TlvDataObject t) {
+				return t == objToRemove;
 			}
-		}
+		});
+		
+	}
+	
+	@Override
+	public void removeTlvDataObject(TlvTag tlvTag) {
+		removeTlvDataObject(new TlvTagIdentifier(tlvTag));
 	}
 
 	@Override
@@ -295,13 +321,9 @@ public class TlvDataObjectContainer extends TlvValue implements Iso7816, TlvData
 	
 	@Override
 	public String toString() {
-		StringBuilder sb;
+		StringBuilder sb = new StringBuilder();
 		
-		sb = new StringBuilder();
-		
-		if(this.tlvObjects.size() > 1) {
-			sb.append("(");
-		}
+		sb.append("(");
 		
 		for(TlvDataObject tlvDataObject : this.tlvObjects) {
 			sb.append("[");
@@ -309,9 +331,7 @@ public class TlvDataObjectContainer extends TlvValue implements Iso7816, TlvData
 			sb.append("]");
 		}
 		
-		if(this.tlvObjects.size() > 1) {
-			sb.append(")");
-		}
+		sb.append(")");
 		
 		return sb.toString();
 	}
@@ -342,6 +362,21 @@ public class TlvDataObjectContainer extends TlvValue implements Iso7816, TlvData
 		}
 		
 		return true;
+	}
+	
+	@Override
+	public TlvDataObjectContainer copy(){
+		return new TlvDataObjectContainer(this.toByteArray());
+	}
+
+	@Override
+	public void removeAllTlvDataObjects() {
+		tlvObjects.clear();
+	}
+
+	@Override
+	public void remove(TlvDataObject object) {
+		tlvObjects.remove(object);
 	}
 	
 }

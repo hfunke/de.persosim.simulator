@@ -9,11 +9,11 @@ import java.security.PublicKey;
 import java.util.Arrays;
 
 import javax.crypto.KeyAgreement;
-import javax.xml.bind.annotation.XmlRootElement;
 
-import de.persosim.simulator.crypto.Crypto;
+import org.globaltester.cryptoprovider.Crypto;
+
 import de.persosim.simulator.crypto.CryptoUtil;
-import de.persosim.simulator.protocols.Oid;
+import de.persosim.simulator.protocols.GenericOid;
 import de.persosim.simulator.protocols.ca.Ca;
 import de.persosim.simulator.tlv.ConstructedTlvDataObject;
 import de.persosim.simulator.tlv.TlvConstants;
@@ -25,13 +25,10 @@ import de.persosim.simulator.utils.HexString;
  * @author mboonk
  * 
  */
-@XmlRootElement
-public class RiOid extends Oid implements Ri, TlvConstants {
+public class RiOid extends GenericOid implements Ri, TlvConstants {
 
 	private String idString;
 
-	public RiOid() {}
-	
 	public RiOid(byte[] byteArrayRepresentation) {
 		super(byteArrayRepresentation);
 

@@ -2,29 +2,30 @@ package de.persosim.simulator.protocols.ta;
 
 import java.util.Arrays;
 
-import de.persosim.simulator.protocols.TR03110;
+import de.persosim.simulator.protocols.Oid;
 import de.persosim.simulator.tlv.ConstructedTlvDataObject;
 import de.persosim.simulator.tlv.PrimitiveTlvDataObject;
+import de.persosim.simulator.tlv.TlvConstants;
 
 /**
  * This object stores the information used in the verify command and transmitted
- * while executing terminal authentication.
+ * while executing terminal authentication. Instances of this class are immutable.
  * 
  * @author mboonk
  * 
  */
 public class AuthenticatedAuxiliaryData {
-	private TaOid objectIdentifier;
+	private Oid objectIdentifier;
 	private byte[] discretionaryData;
 
-	public AuthenticatedAuxiliaryData(TaOid objectIdentifier,
+	public AuthenticatedAuxiliaryData(Oid objectIdentifier,
 			byte[] discretionaryData) {
 		super();
 		this.objectIdentifier = objectIdentifier;
-		this.discretionaryData = discretionaryData;
+		this.discretionaryData = Arrays.copyOf(discretionaryData, discretionaryData.length);
 	}
 
-	public TaOid getObjectIdentifier() {
+	public Oid getObjectIdentifier() {
 		return objectIdentifier;
 	}
 
@@ -33,9 +34,9 @@ public class AuthenticatedAuxiliaryData {
 	}
 
 	public ConstructedTlvDataObject getEncoded() {
-		ConstructedTlvDataObject result = new ConstructedTlvDataObject(TR03110.TAG_73);
-		PrimitiveTlvDataObject oid = new PrimitiveTlvDataObject(TR03110.TAG_06, objectIdentifier.toByteArray());
-		PrimitiveTlvDataObject dd = new PrimitiveTlvDataObject(TR03110.TAG_53, discretionaryData);
+		ConstructedTlvDataObject result = new ConstructedTlvDataObject(TlvConstants.TAG_73);
+		PrimitiveTlvDataObject oid = new PrimitiveTlvDataObject(TlvConstants.TAG_06, objectIdentifier.toByteArray());
+		PrimitiveTlvDataObject dd = new PrimitiveTlvDataObject(TlvConstants.TAG_53, Arrays.copyOf(discretionaryData, discretionaryData.length));
 		result.addTlvDataObject(oid);
 		result.addTlvDataObject(dd);
 		return result;

@@ -1,17 +1,20 @@
 package de.persosim.simulator.processing;
 
-import static de.persosim.simulator.utils.PersoSimLogger.TRACE;
-import static de.persosim.simulator.utils.PersoSimLogger.WARN;
-import static de.persosim.simulator.utils.PersoSimLogger.log;
+import static org.globaltester.logging.BasicLogger.log;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedList;
+
+import org.globaltester.logging.InfoSource;
+import org.globaltester.logging.tags.LogLevel;
+import org.globaltester.simulator.SimulatorEventListener;
+import org.globaltester.simulator.event.SimulatorEvent;
 
 import de.persosim.simulator.apdu.CommandApdu;
 import de.persosim.simulator.apdu.ResponseApdu;
 import de.persosim.simulator.platform.Iso7816;
 import de.persosim.simulator.platform.PlatformUtil;
-import de.persosim.simulator.utils.InfoSource;
 
 /**
  * The primary purpose of this class is to store data about an APDU which
@@ -31,6 +34,8 @@ public class ProcessingData implements Iso7816, InfoSource {
 	protected HashMap<Class<? extends UpdatePropagation>, LinkedList<UpdatePropagation>> updatePropagations = new HashMap<>();
 	
 	protected LinkedList<ProcessingStateUpdate> processingHistory = new LinkedList<>();
+	
+	private LinkedList<SimulatorEventListener> simEventListeners = new LinkedList<>();
 	
 	/*--------------------------------------------------------------------------------*/
 	/* Variables concerning APDU processing status */
@@ -67,15 +72,15 @@ public class ProcessingData implements Iso7816, InfoSource {
 	 */
 	public void updateProcessingState(InfoSource source, String message, ProcessingStateDelta... update) {
 		//log modifications accordingly
-		log(source, "Update processing state with " + update.length + " deltas.", TRACE);
-		log(source, "Update message\n" + message, TRACE);
+		log(source, "Update processing state with " + update.length + " deltas.", LogLevel.TRACE);
+		log(source, "Update message\n" + message, LogLevel.TRACE);
 		for (ProcessingStateDelta curStateDelta : update) {
 			if (curStateDelta != null && curStateDelta.getNrOfModifications() > 0) {
 				// add to state history
 				processingHistory.add(new ProcessingStateUpdate(source, message, curStateDelta));
 
 				//log modifications accordingly
-				log(source, "Processing state delta " + curStateDelta, TRACE);
+				log(source, curStateDelta.toString(), LogLevel.TRACE);
 				
 				// update command APDU if present
 				if (curStateDelta.getCommandApdu() != null) {
@@ -94,13 +99,13 @@ public class ProcessingData implements Iso7816, InfoSource {
 					
 					
 					this.commandApdu = curStateDelta.getCommandApdu();
-					log(source, "Command APDU updated\n" + commandApdu, TRACE);
+					log(source, "Command APDU updated\n" + commandApdu, LogLevel.TRACE);
 				}
 
 				// update response APDU if present
 				if (curStateDelta.getResponseApdu() != null) {
 					this.responseApdu = curStateDelta.getResponseApdu();
-					log(source, "Response APDU updated\n" + responseApdu + "\nreason is: " + message, TRACE);
+					log(source, "Response APDU updated\n" + responseApdu + "\nreason is: " + message, LogLevel.TRACE);
 				}
 				
 				// update updatePropagations if present
@@ -121,7 +126,7 @@ public class ProcessingData implements Iso7816, InfoSource {
 							// add current new propagation to the list 
 							curPropagations.add(curNewProp);
 						} else {
-							log(this, "Skipping one UpdatePropagation, as type does not match key", WARN);
+							log(this, "Skipping one UpdatePropagation, as type does not match key", LogLevel.WARN);
 						}
 					}
 				}
@@ -166,7 +171,6 @@ public class ProcessingData implements Iso7816, InfoSource {
 	 */
 	public LinkedList<UpdatePropagation> getUpdatePropagations(
 			Class<? extends UpdatePropagation> key) {
-		//TODO AMY check whether the UpdatePropagations should be secured by returning clones here
 		LinkedList<UpdatePropagation> retVal = updatePropagations.get(key);
 		
 		//ensure reVal is not null
@@ -195,6 +199,22 @@ public class ProcessingData implements Iso7816, InfoSource {
 	public void addUpdatePropagation(InfoSource source, String message,
 			UpdatePropagation updatePropagation) {
 		updateProcessingState(source, message, new ProcessingStateDelta(updatePropagation));
+	}
+
+	public void addAllEventListener(Collection<? extends SimulatorEventListener> newSimEventListeners) {
+		simEventListeners.addAll(newSimEventListeners);
+	}
+
+	/**
+	 * Notify all currently registered {@link SimulatorEventListener} of the
+	 * given {@link SimulatorEvent}
+	 * 
+	 * @param simEvent
+	 */
+	public void notifySimulatorEventListeners(SimulatorEvent simEvent) {
+		for (SimulatorEventListener curListener : simEventListeners) {
+			curListener.notifySimulatorEvent(simEvent);
+		}
 	}
 
 }

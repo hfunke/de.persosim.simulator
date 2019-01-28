@@ -1,19 +1,25 @@
 package de.persosim.simulator.platform;
 
-import static de.persosim.simulator.utils.PersoSimLogger.TRACE;
-import static de.persosim.simulator.utils.PersoSimLogger.log;
+import static org.globaltester.logging.BasicLogger.log;
 
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.List;
 
-import org.bouncycastle.util.encoders.Hex;
+import org.globaltester.logging.InfoSource;
+import org.globaltester.logging.tags.LogLevel;
+import org.globaltester.simulator.Simulator;
+import org.globaltester.simulator.SimulatorEventListener;
+import org.globaltester.simulator.event.CommandApduEvent;
+import org.globaltester.simulator.event.ResponseApduEvent;
+import org.globaltester.simulator.event.SimulatorEvent;
 
+import de.persosim.simulator.exception.AccessDeniedException;
 import de.persosim.simulator.perso.Personalization;
 import de.persosim.simulator.processing.ProcessingData;
 import de.persosim.simulator.processing.UpdatePropagation;
-import de.persosim.simulator.securemessaging.SecureMessaging;
 import de.persosim.simulator.utils.HexString;
-import de.persosim.simulator.utils.InfoSource;
-import de.persosim.simulator.utils.PersoSimLogger;
 import de.persosim.simulator.utils.Utils;
 
 /**
@@ -26,34 +32,29 @@ import de.persosim.simulator.utils.Utils;
  */
 public class PersoSimKernel implements InfoSource {
 
-	private LinkedList<Layer> layers;
-	private Personalization perso;
+	private List<Layer> layers;
+	
+	private HashSet<SimulatorEventListener> simEventListeners = new HashSet<>();
 	
 	/**
 	 * Constructor that provides the inital {@link Personalization}
-	 * @param perso
+	 * @throws AccessDeniedException 
 	 */
-	public PersoSimKernel(Personalization perso) {
+	public PersoSimKernel() throws AccessDeniedException {
 		super();
-		this.perso = perso;
 	}
-	
+
 	/**
 	 * Performs initialization of object.
+	 * @param perso 
 	 */
-	public void init() {
-		PersoSimLogger.init();
-		log(this, "init called", TRACE);
+	public void init(Personalization perso) {
+		log(this, "init called", LogLevel.TRACE);
 		
-		int layerId = 0;
-		layers = new LinkedList<>();
-		layers.add(new IoManager(layerId++));
-		layers.add(new SecureMessaging(layerId++));
-		CommandProcessor commandProcessor = new CommandProcessor(layerId++, perso);
-		commandProcessor.init();
-		layers.add(commandProcessor);
+		perso.initialize();
+		layers = perso.getLayerList();
 		
-		log(this, "init finished", TRACE);
+		log(this, "init finished", LogLevel.TRACE);
 	}
 
 	public byte[] powerOff() {
@@ -61,7 +62,7 @@ public class PersoSimKernel implements InfoSource {
 		for (int curLayerId = layers.size()-1; curLayerId >= 0; curLayerId--) {
 			layers.get(curLayerId).powerOff();	
 		}
-				
+		
 		return Utils.toUnsignedByteArray(Iso7816.SW_9000_NO_ERROR);
 	}
 
@@ -71,10 +72,10 @@ public class PersoSimKernel implements InfoSource {
 			layers.get(curLayerId).powerOn();	
 		}
 				
-		//TODO AMY move atr definition to Personalization
-		String atr = "3BE800008131FE00506572736F53696D";
-		//                            P e r s o S i m 
-		return Hex.decode(atr);
+		//maybe move atr definition to Personalization
+		String atr = "3BE900008131FE00" + "FF" + "506572736F53696D" + "54";
+		//                                 Prop.  P e r s o S i m      XOR Checksum (required for T=1)
+		return HexString.toByteArray(atr);
 	}
 
 	public byte[] reset() {
@@ -94,42 +95,68 @@ public class PersoSimKernel implements InfoSource {
 	 * accompanying ProcessingData-Objects are propagated through all available
 	 * layers from bottom to the top and back down again.
 	 * 
-	 * @param apdu
+	 * @param commandApduData
 	 *            the APDU that was recently received
 	 */
-	public byte[] process(byte[] apdu) {
+	public byte[] process(byte[] commandApduData) {
 		
-		log(this, "processing incoming APDU", TRACE);
-		log(this, "incoming APDU:\n" + HexString.dump(apdu), TRACE);
+		log(this, "Processing incoming APDU");
+		log(this, "Processing APDU:\n" + HexString.dump(commandApduData), LogLevel.TRACE);
+		notifyListeners(new CommandApduEvent(commandApduData));
 		
 		ProcessingData processingData = new ProcessingData();
-		processingData.addUpdatePropagation(this, "initial hardware info", new HardwareCommandApduPropagation(apdu));
+		processingData.addAllEventListener(simEventListeners);
+		processingData.addUpdatePropagation(this, "initial hardware info", new HardwareCommandApduPropagation(commandApduData));
 		
 		//propagate the event all layers up
 		int curLayerId = 0;
+		Layer currentLayer;
 		for (; curLayerId < layers.size(); curLayerId++) {
-			layers.get(curLayerId).processAscending(processingData);	
+			currentLayer = layers.get(curLayerId);
+			currentLayer.processAscending(processingData);
 		}
 		
 		//propagate the event all layers down
 		for (curLayerId--; curLayerId >= 0; curLayerId--) {
-			layers.get(curLayerId).processDescending(processingData);
+			currentLayer = layers.get(curLayerId);
+			currentLayer.processDescending(processingData);
 		}
 		
 		//extract prepared response
-		byte[] retVal;
+		byte[] responseApduData;
 		LinkedList<UpdatePropagation> hardwareResponses = processingData.getUpdatePropagations(HardwareResponseApduPropagation.class);
 		UpdatePropagation lastHardwareResponseUpdate = hardwareResponses.getLast();
 		
 		if (lastHardwareResponseUpdate != null && lastHardwareResponseUpdate instanceof HardwareResponseApduPropagation) {
-			retVal =  ((HardwareResponseApduPropagation)lastHardwareResponseUpdate).getResponseApdu();
+			responseApduData =  ((HardwareResponseApduPropagation)lastHardwareResponseUpdate).getResponseApdu();
 		} else {
-			retVal = Utils.toUnsignedByteArray(Iso7816.SW_6F00_UNKNOWN);
+			responseApduData = Utils.toUnsignedByteArray(Iso7816.SW_6F00_UNKNOWN+0x45);
 		}
 		
-		log(this, "finished processing APDU");
-		log(this, "outgoing APDU:\n" + HexString.dump(retVal), TRACE);
-		return retVal;
+		log(this, "APDU processing finished");
+		log(this, "Response APDU:\n" + HexString.dump(responseApduData), LogLevel.TRACE);
+		notifyListeners(new ResponseApduEvent(responseApduData));
+		return responseApduData;
 		
+	}
+
+	private void notifyListeners(SimulatorEvent simEvent) {
+		for (SimulatorEventListener curListener : simEventListeners) {
+			curListener.notifySimulatorEvent(simEvent);
+		}
+	}
+
+	/**
+	 * @see Simulator#addEventListener(SimulatorEventListener...)
+	 */
+	public void addEventListener(SimulatorEventListener... newListeners) {
+		simEventListeners.addAll(Arrays.asList(newListeners));
+	}
+
+	/**
+	 * @see Simulator#removeEventListener(SimulatorEventListener)
+	 */
+	public void removeEventListener(SimulatorEventListener oldListener) {
+		simEventListeners.remove(oldListener);
 	}
 }

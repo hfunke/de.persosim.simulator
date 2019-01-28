@@ -164,30 +164,35 @@ public interface Iso7816 {
 	 * P1 according to ISO7816-4
 	 */
 
-	public static final byte P1_SELECT_FILE_MF_DF_EF 				= (byte) 0x00;
-	public static final byte P1_SELECT_FILE_CHILD_DF 				= (byte) 0x01;
-	public static final byte P1_SELECT_FILE_EF_UNDER_CURRENT_DF 	= (byte) 0x02;
-	public static final byte P1_SELECT_FILE_PARENT_DF 				= (byte) 0x03;
-	public static final byte P1_SELECT_FILE_DF_BY_NAME 				= (byte) 0x04;
-	public static final byte P1_SELECT_FILE_BY_PATH_FROM_MF 		= (byte) 0x08;
-	public static final byte P1_SELECT_FILE_BY_PATH_FROM_DF 		= (byte) 0x09;
+	public static final byte P1_SELECT_FILE_MF_DF_EF 				   = (byte) 0x00;
+	public static final byte P1_SELECT_FILE_CHILD_DF 				   = (byte) 0x01;
+	public static final byte P1_SELECT_FILE_EF_UNDER_CURRENT_DF 	   = (byte) 0x02;
+	public static final byte P1_SELECT_FILE_PARENT_DF 				   = (byte) 0x03;
+	public static final byte P1_SELECT_FILE_DF_BY_NAME 				   = (byte) 0x04;
+	public static final byte P1_SELECT_FILE_BY_PATH_FROM_MF 		   = (byte) 0x08;
+	public static final byte P1_SELECT_FILE_BY_PATH_FROM_DF 		   = (byte) 0x09;
+	
+	// P1 for {@link #INS_2C_RESET_RETRY_COUNTER}
+	public static final byte P1_RESET_RETRY_COUNTER_NEW_DATA           = (byte) 0x02;
+	public static final byte P1_RESET_RETRY_COUNTER_ABSENT_DATA        = (byte) 0x03;
 	
 
 	/*
 	 * P2 according to ISO7816-4
 	 */
 
-	public static final byte P2_SELECT_OCCURRENCE_MASK = 0b00000011;
-	public static final byte P2_SELECT_OCCURRENCE_FIRST = (byte) 0b0000;
-	public static final byte P2_SELECT_OCCURRENCE_LAST = (byte) 0b0001;
-	public static final byte P2_SELECT_OCCURRENCE_NEXT = (byte) 0b0010;
-	public static final byte P2_SELECT_OCCURRENCE_PREVIOUS = (byte) 0b0011;
+	public static final byte P2_SELECT_OCCURRENCE_MASK                 = 0b00000011;
+	public static final byte P2_SELECT_OCCURRENCE_FIRST                = (byte) 0b0000;
+	public static final byte P2_SELECT_OCCURRENCE_LAST                 = (byte) 0b0001;
+	public static final byte P2_SELECT_OCCURRENCE_NEXT                 = (byte) 0b0010;
+	public static final byte P2_SELECT_OCCURRENCE_PREVIOUS             = (byte) 0b0011;
 
-	public static final byte P2_SELECT_FCI_MASK = 0b00001100;
-	public static final byte P2_SELECT_FCI_TEMPLATE = (byte) 0b0000;
-	public static final byte P2_SELECT_FCP_TEMPLATE = (byte) 0b0100;
-	public static final byte P2_SELECT_FMD_TEMPLATE = (byte) 0b1000;
-	public static final byte P2_SELECT_NO_OR_PROPRIETARY = (byte) 0b1100;
+	public static final byte P2_SELECT_FCI_MASK                        = 0b00001100;
+	public static final byte P2_SELECT_FCI_TEMPLATE                    = (byte) 0b0000;
+	public static final byte P2_SELECT_FCP_TEMPLATE                    = (byte) 0b0100;
+	public static final byte P2_SELECT_FMD_TEMPLATE                    = (byte) 0b1000;
+	public static final byte P2_SELECT_NO_OR_PROPRIETARY               = (byte) 0b1100;
+	
 	
 	/*
 	 * SW1-SW2 according to ISO7816-4
@@ -202,10 +207,13 @@ public interface Iso7816 {
 	public static final short SW_6200_WARNING_STATE_UNCHANGED            = (short) 0x6200;
 	public static final short SW_6282_END_OF_FILE_REACHED_BEFORE_READING_NE_BYTES = (short) 0x6282;
 	public static final short SW_6283_SELECTED_FILE_DEACTIVATED          = (short) 0x6283;
+	public static final short SW_6285_SELECTED_FILE_TERMINATED           = (short) 0x6285;
 	/*--------------------------------------------------------------------------------*/
 	public static final short SW_6300_AUTHENTICATION_FAILED              = (short) 0x6300;
 	public static final short SW_63C0_COUNTER_IS_0                       = (short) 0x63C0;
 	public static final short SW_63C1_COUNTER_IS_1                       = (short) 0x63C1;
+	public static final short SW_63C2_COUNTER_IS_2                       = (short) 0x63C2;
+	public static final short SW_63C3_COUNTER_IS_3                       = (short) 0x63C3;
 	/*--------------------------------------------------------------------------------*/
 	/* Execution error */
 	public static final short SW_6400_EXECUTION_ERROR                    = (short) 0x6400;

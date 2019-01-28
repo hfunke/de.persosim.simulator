@@ -1,7 +1,6 @@
 package de.persosim.simulator.cardobjects;
 
-import javax.xml.bind.annotation.XmlAttribute;
-
+import de.persosim.simulator.utils.HexString;
 import de.persosim.simulator.utils.Utils;
 
 /**
@@ -18,7 +17,6 @@ import de.persosim.simulator.utils.Utils;
 public abstract class IntegerIdentifier extends AbstractCardObjectIdentifier {
 	protected static final int MATCHES_ALWAYS = Integer.MIN_VALUE;
 	
-	@XmlAttribute
 	int integer;
 	
 	public IntegerIdentifier(int integer) {
@@ -26,7 +24,7 @@ public abstract class IntegerIdentifier extends AbstractCardObjectIdentifier {
 	}
 	
 	public IntegerIdentifier() {
-		this(Integer.MIN_VALUE);
+		this(MATCHES_ALWAYS);
 	}
 	
 	public IntegerIdentifier(byte[] idBytes) {
@@ -34,14 +32,27 @@ public abstract class IntegerIdentifier extends AbstractCardObjectIdentifier {
 	}
 
 	@Override
-	public boolean matches(CardObjectIdentifier obj) {
-		if (obj instanceof IntegerIdentifier) {
-			int otherInteger = ((IntegerIdentifier) obj).getInteger();
-			if ((otherInteger == integer) || (integer == MATCHES_ALWAYS)) {
-				return true;
+	public boolean matches(CardObject obj) {
+		for (CardObjectIdentifier curIdentifier : obj.getAllIdentifiers()) {
+			if (curIdentifier == null) continue;
+			
+			if (this.getClass().isAssignableFrom(curIdentifier.getClass())) {
+				if (integer == MATCHES_ALWAYS) {
+					return true;
+				}
+				
+				int otherInteger = ((IntegerIdentifier) curIdentifier).getInteger();
+				if ((otherInteger == integer)) {
+					return true;
+				}
 			}
 		}
 		return false;
+	}
+	
+	@Override
+	public String toString() {
+		return integer + " (0x" + HexString.encode(Utils.toUnsignedByteArray(integer)) + ")";
 	}
 
 	public int getInteger() {

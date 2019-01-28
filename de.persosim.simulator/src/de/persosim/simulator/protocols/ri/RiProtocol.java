@@ -8,39 +8,46 @@ import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 
 import javax.crypto.KeyAgreement;
-import javax.xml.bind.annotation.XmlRootElement;
+
+import org.globaltester.cryptoprovider.Crypto;
+import org.globaltester.logging.InfoSource;
 
 import de.persosim.simulator.apdu.ResponseApdu;
-import de.persosim.simulator.apdumatching.ApduSpecification;
 import de.persosim.simulator.apdumatching.ApduSpecificationConstants;
-import de.persosim.simulator.apdumatching.TlvSpecification;
 import de.persosim.simulator.cardobjects.CardObject;
+import de.persosim.simulator.cardobjects.CardObjectIdentifier;
+import de.persosim.simulator.cardobjects.CardObjectUtils;
 import de.persosim.simulator.cardobjects.KeyIdentifier;
-import de.persosim.simulator.cardobjects.KeyObject;
-import de.persosim.simulator.cardobjects.Scope;
-import de.persosim.simulator.crypto.Crypto;
+import de.persosim.simulator.cardobjects.KeyPairObject;
+import de.persosim.simulator.cardobjects.MasterFile;
+import de.persosim.simulator.cardobjects.OidIdentifier;
+import de.persosim.simulator.crypto.StandardizedDomainParameters;
 import de.persosim.simulator.exception.VerificationException;
 import de.persosim.simulator.platform.CardStateAccessor;
 import de.persosim.simulator.platform.Iso7816;
 import de.persosim.simulator.platform.PlatformUtil;
 import de.persosim.simulator.processing.ProcessingData;
+import de.persosim.simulator.protocols.GenericOid;
+import de.persosim.simulator.protocols.Oid;
 import de.persosim.simulator.protocols.Protocol;
+import de.persosim.simulator.protocols.RoleOid;
+import de.persosim.simulator.protocols.SecInfoPublicity;
+import de.persosim.simulator.protocols.ta.Authorization;
 import de.persosim.simulator.protocols.ta.TerminalAuthenticationMechanism;
+import de.persosim.simulator.protocols.ta.TerminalType;
+import de.persosim.simulator.secstatus.EffectiveAuthorizationMechanism;
 import de.persosim.simulator.secstatus.SecMechanism;
 import de.persosim.simulator.secstatus.SecStatus.SecContext;
-import de.persosim.simulator.tlv.Asn1;
 import de.persosim.simulator.tlv.ConstructedTlvDataObject;
 import de.persosim.simulator.tlv.PrimitiveTlvDataObject;
 import de.persosim.simulator.tlv.TlvConstants;
 import de.persosim.simulator.tlv.TlvDataObject;
 import de.persosim.simulator.tlv.TlvDataObjectContainer;
 import de.persosim.simulator.tlv.TlvTag;
-import de.persosim.simulator.tlv.TlvValuePlain;
-import de.persosim.simulator.utils.HexString;
-import de.persosim.simulator.utils.InfoSource;
 import de.persosim.simulator.utils.Utils;
 
 /**
@@ -50,15 +57,13 @@ import de.persosim.simulator.utils.Utils;
  * @author mboonk
  * 
  */
-@XmlRootElement
 public class RiProtocol implements Protocol, Iso7816, ApduSpecificationConstants,
 		InfoSource, Ri, TlvConstants {
 
-	private HashSet<ApduSpecification> apdus = null;
 	private CardStateAccessor cardState;
 	private int privateKeyReference;
-
-	private KeyPair staticKeyPair;
+	
+	private KeyPairObject staticKeyObject;
 
 	public RiProtocol() {
 		reset();
@@ -75,61 +80,126 @@ public class RiProtocol implements Protocol, Iso7816, ApduSpecificationConstants
 	}
 
 	@Override
-	public Collection<TlvDataObject> getSecInfos() {
+	public Collection<TlvDataObject> getSecInfos(SecInfoPublicity publicity, MasterFile mf) {
 
-		// XXX MBK store oids in object store
-
-		HashSet<TlvDataObject> result = new HashSet<>();
-
-		ConstructedTlvDataObject riInfo = new ConstructedTlvDataObject(
-				new TlvTag(Asn1.SEQUENCE));
-
-		PrimitiveTlvDataObject protocol = new PrimitiveTlvDataObject(
-				new TlvTag(Asn1.OBJECT_IDENTIFIER), new TlvValuePlain(
-						new RiOid(id_RI_ECDH).toByteArray()));
-
-		ConstructedTlvDataObject params = new ConstructedTlvDataObject(
-				new TlvTag(Asn1.SEQUENCE));
-
-		PrimitiveTlvDataObject version = new PrimitiveTlvDataObject(new TlvTag(
-				Asn1.INTEGER), new TlvValuePlain(HexString.toByteArray("01")));
-
-		PrimitiveTlvDataObject keyId = new PrimitiveTlvDataObject(new TlvTag(
-				Asn1.INTEGER), new TlvValuePlain(HexString.toByteArray("01")));
-
-		PrimitiveTlvDataObject authorizedOnly = new PrimitiveTlvDataObject(
-				new TlvTag(Asn1.UNIVERSAL_BOOLEAN),
-				TlvConstants.DER_BOOLEAN_FALSE);
-
-		params.addTlvDataObject(version);
-		params.addTlvDataObject(keyId);
-		params.addTlvDataObject(authorizedOnly);
-
-		riInfo.addTlvDataObject(protocol);
-		riInfo.addTlvDataObject(params);
-
-		result.add(riInfo);
-		riInfo = new ConstructedTlvDataObject(new TlvTag(Asn1.SEQUENCE));
-
-		protocol = new PrimitiveTlvDataObject(
-				new TlvTag(Asn1.OBJECT_IDENTIFIER), new TlvValuePlain(
-						new RiOid(RiOid.id_RI_ECDH).toByteArray()));
-
-		params.addTlvDataObject(version);
-		params.addTlvDataObject(keyId);
-		params.addTlvDataObject(authorizedOnly);
-
-		riInfo.addTlvDataObject(protocol);
-		riInfo.addTlvDataObject(params);
-
-		result.add(riInfo);
-
-		return result;
+		if ((publicity == SecInfoPublicity.AUTHENTICATED) || (publicity == SecInfoPublicity.PRIVILEGED)) {
+			OidIdentifier riOidIdentifier = new OidIdentifier(new GenericOid(Ri.id_RI));
+			
+			Collection<CardObject> riKeyCardObjects = mf.findChildren(
+					new KeyIdentifier(), riOidIdentifier);
+			
+			HashSet<TlvDataObject> secInfos = new HashSet<>();
+			
+			for (CardObject curCardObject : riKeyCardObjects) {
+				if (! (curCardObject instanceof KeyPairObject)) {
+					continue;
+				}
+				
+				KeyPairObject curKey = (KeyPairObject) curCardObject;
+				
+				Collection<CardObjectIdentifier> identifiers = curKey.getAllIdentifiers();
+				
+				//extract keyId
+				int keyId = -1;
+				for (CardObjectIdentifier curIdentifier : identifiers) {
+					if (curIdentifier instanceof KeyIdentifier) {
+						keyId = ((KeyIdentifier) curIdentifier).getKeyReference();
+						break;
+					}
+				}
+				
+				if (keyId == -1) continue; // skip keys that dont't provide a keyId
+				
+				//cached values
+				byte[] genericRiOidBytes = null;
+				
+				//construct and add RiInfos
+				for (CardObjectIdentifier curIdentifier : identifiers) {
+					if (curIdentifier instanceof OidIdentifier) {
+						Oid curOid = ((OidIdentifier) curIdentifier).getOid();
+						if (curOid.startsWithPrefix(id_RI)) {
+							byte[] oidBytes = curOid.toByteArray();
+							genericRiOidBytes = Arrays.copyOfRange(oidBytes, 0, 9);
+							
+							/*
+							 * ProtocolParams ::= SEQUENCE {
+							 * 		version         INTEGER, -- MUST be 1
+							 * 		keyId           INTEGER,
+							 * 		authorizedOnly  BOOLEAN
+							 * }
+							 */
+							ConstructedTlvDataObject params = new ConstructedTlvDataObject(TAG_SEQUENCE);
+							params.addTlvDataObject(new PrimitiveTlvDataObject(TAG_INTEGER, new byte[]{1}));
+							params.addTlvDataObject(new PrimitiveTlvDataObject(TAG_INTEGER, new byte[]{(byte) keyId}));
+							
+							// add "authorizedOnly"
+							if(curKey.isPrivilegedOnly()) {
+								params.addTlvDataObject(new PrimitiveTlvDataObject(TAG_BOOLEAN, DER_BOOLEAN_TRUE)); //IMPL RI handle authorizedOnly
+							} else {
+								params.addTlvDataObject(new PrimitiveTlvDataObject(TAG_BOOLEAN, DER_BOOLEAN_FALSE));
+							}
+							
+							// define RestrictedIdentificationInfo
+							
+							/*
+							 * RestrictedIdentificationInfo ::= SEQUENCE {
+							 * 		protocol  OBJECT IDENTIFIER(
+							 *           id-RI-DH-SHA-1  |
+							 *           id-RI-DH-SHA-224  |
+							 *           id-RI-DH-SHA-256  |
+							 *           id-RI-DH-SHA-384 |
+							 *           id-RI-DH-SHA-512 |
+							 *           id-RI-ECDH-SHA-1  |
+							 *           id-RI-ECDH-SHA-224  |
+							 *           id-RI-ECDH-SHA-256 |
+							 *           id-RI-ECDH-SHA-384 |
+							 *           id-RI-ECDH-SHA-512),
+							 * 		params    ProtocolParams,
+							 * 		maxKeyLen INTEGER OPTIONAL
+							 * }
+							 */
+							ConstructedTlvDataObject riInfo = new ConstructedTlvDataObject(TAG_SEQUENCE);
+							riInfo.addTlvDataObject(new PrimitiveTlvDataObject(TAG_OID, oidBytes));
+							riInfo.addTlvDataObject(params);
+							//IMPL RI handle maxKeyLen
+	//						riInfo.addTlvDataObject(new PrimitiveTlvDataObject(TAG_INTEGER, new byte[]{xxx}));
+							
+							secInfos.add(riInfo);
+						}
+					}
+				}
+				
+				//extract required data from curKey
+				KeyPair curKeyPair = curKey.getKeyPair();
+				ConstructedTlvDataObject encKey = new ConstructedTlvDataObject(curKeyPair.getPublic().getEncoded());
+				ConstructedTlvDataObject algIdentifier = (ConstructedTlvDataObject) encKey.getTlvDataObject(TAG_SEQUENCE);
+				
+				//using standardized domain parameters if possible
+				algIdentifier = StandardizedDomainParameters.simplifyAlgorithmIdentifier(algIdentifier);
+				
+				/*
+				 * RestrictedIdentificationDomainParameterInfo ::= SEQUENCE {
+				 *   protocol        OBJECT IDENTIFIER(id-RI-DH  |  id-RI-ECDH),
+				 *   domainParameter AlgorithmIdentifier
+				 * }
+				 */
+				ConstructedTlvDataObject riDomainInfo = new ConstructedTlvDataObject(TAG_SEQUENCE);
+				riDomainInfo.addTlvDataObject(new PrimitiveTlvDataObject(TAG_OID, genericRiOidBytes));
+				riDomainInfo.addTlvDataObject(algIdentifier);
+				
+				secInfos.add(riDomainInfo);
+			}
+			
+			return secInfos;
+		} else {
+			return Collections.emptySet();
+		}
 	}
 
 	@Override
 	public void process(ProcessingData processingData) {
-		if (processingData.getCommandApdu().getIns() == INS_22_MANAGE_SECURITY_ENVIRONMENT) {
+		
+		if (processingData.getCommandApdu().getIns() == INS_22_MANAGE_SECURITY_ENVIRONMENT && processingData.getCommandApdu().getP1() == (byte) 0x41) {
 			processCommandSetAt(processingData);
 		} else if (processingData.getCommandApdu().getIns() == INS_86_GENERAL_AUTHENTICATE) {
 			processCommandGeneralAuthenticate(processingData);
@@ -205,12 +275,12 @@ public class RiProtocol implements Protocol, Iso7816, ApduSpecificationConstants
 	 * @throws VerificationException
 	 */
 	private PrimitiveTlvDataObject handleSectorKey(TlvTag commandTag, PrivateKey staticPrivateKey, ConstructedTlvDataObject dynamicAuthenticationData, MessageDigest publicKeyCheckingHash, byte [] sectorPublicKeyHash, TlvTag responseTag) throws GeneralSecurityException, VerificationException{
-		TlvDataObject sectorPublicKeyData = dynamicAuthenticationData.getTagField(commandTag);
+		TlvDataObject sectorPublicKeyData = dynamicAuthenticationData.getTlvDataObject(commandTag);
 		if (sectorPublicKeyData instanceof ConstructedTlvDataObject) {
 			if (!checkSectorPublicKeyHash((ConstructedTlvDataObject)sectorPublicKeyData, publicKeyCheckingHash, sectorPublicKeyHash)){
 				throw new VerificationException("The public key hash transmitted during a previous protocol does not match the given public key");
 			}
-			RiOid oid = new RiOid(((ConstructedTlvDataObject)sectorPublicKeyData).getTagField(TlvConstants.TAG_06).getValueField());
+			RiOid oid = new RiOid(((ConstructedTlvDataObject)sectorPublicKeyData).getTlvDataObject(TlvConstants.TAG_06).getValueField());
 			PublicKey sectorPublicKey = oid.parsePublicKey((ConstructedTlvDataObject) sectorPublicKeyData);
 			return new PrimitiveTlvDataObject(responseTag, calculateSectorIdentifier(staticPrivateKey, sectorPublicKey, oid.getKeyAgreement(), oid.getHash()));
 		}
@@ -218,17 +288,45 @@ public class RiProtocol implements Protocol, Iso7816, ApduSpecificationConstants
 	}
 	
 	private void processCommandGeneralAuthenticate(ProcessingData processingData) {
-		if (processingData.getCommandApdu().getCommandDataObjectContainer().getTagField(TlvConstants.TAG_7C) instanceof ConstructedTlvDataObject){
+		if (processingData.getCommandApdu().getCommandDataObjectContainer().getTlvDataObject(TlvConstants.TAG_7C) instanceof ConstructedTlvDataObject){
 			ConstructedTlvDataObject dynamicAuthenticationData = (ConstructedTlvDataObject)processingData.getCommandApdu()
-					.getCommandDataObjectContainer().getTagField(TlvConstants.TAG_7C);
+					.getCommandDataObjectContainer().getTlvDataObject(TlvConstants.TAG_7C);
 			
 			//get necessary information stored in TA
 			HashSet<Class<? extends SecMechanism>> previousMechanisms = new HashSet<>();
 			previousMechanisms.add(TerminalAuthenticationMechanism.class);
+			previousMechanisms.add(EffectiveAuthorizationMechanism.class);
 			Collection<SecMechanism> currentMechanisms = cardState.getCurrentMechanisms(SecContext.APPLICATION, previousMechanisms);
+			
 			TerminalAuthenticationMechanism taMechanism = null;
-			if (currentMechanisms.size() > 0){
-				taMechanism = (TerminalAuthenticationMechanism) currentMechanisms.toArray()[0];
+			EffectiveAuthorizationMechanism authMechanism = null;
+			
+			if (currentMechanisms.size() >= 2){
+				for(SecMechanism secmechanism:currentMechanisms) {
+					if(secmechanism instanceof TerminalAuthenticationMechanism) {
+						taMechanism = (TerminalAuthenticationMechanism) secmechanism;
+					}
+					
+					if(secmechanism instanceof EffectiveAuthorizationMechanism) {
+						authMechanism = (EffectiveAuthorizationMechanism) secmechanism;
+					}
+				}
+				
+				if((taMechanism == null) || (authMechanism == null)) {
+					// create and propagate response APDU
+					ResponseApdu resp = new ResponseApdu(Iso7816.SW_6985_CONDITIONS_OF_USE_NOT_SATISFIED);
+					processingData.updateResponseAPDU(this, "Restricted Identification only allowed for Authentication Terminals", resp);
+					return;
+				}
+				
+				Authorization auth = authMechanism.getAuthorization(RoleOid.id_AT);
+				
+				if (!(taMechanism.getTerminalType().equals(TerminalType.AT))) {
+					// create and propagate response APDU
+					ResponseApdu resp = new ResponseApdu(Iso7816.SW_6985_CONDITIONS_OF_USE_NOT_SATISFIED);
+					processingData.updateResponseAPDU(this, "Restricted Identification only allowed for Authentication Terminals", resp);
+					return;
+				}
 
 				byte [] firstSectorPublicKeyHash = taMechanism.getFirstSectorPublicKeyHash();
 				byte [] secondSectorPublicKeyHash = taMechanism.getSecondSectorPublicKeyHash();
@@ -243,39 +341,51 @@ public class RiProtocol implements Protocol, Iso7816, ApduSpecificationConstants
 					return;
 				}
 
-				if (staticKeyPair == null){
+				if (staticKeyObject == null){
+					//{@link staticKeyObject} may be null either if setAt has not yet been executed or failed.
+					
 					// create and propagate response APDU
 					ResponseApdu resp = new ResponseApdu(PlatformUtil.SW_4A80_WRONG_DATA);
 					processingData.updateResponseAPDU(this,
-							"The static key pair was not set correctly, probably because of missing setAT execution", resp);
+							"The static key pair was not set correctly, probably due to missing or failed execution of setAT command", resp);
 					return;
 				}
 				
-				PrivateKey staticPrivateKey = (PrivateKey) staticKeyPair
-						.getPrivate();
+				KeyPair staticKeyPair = staticKeyObject.getKeyPair();
+				
+				// check for Restricted Identification bit
+				if(staticKeyObject.isPrivilegedOnly()) {
+					if ((auth == null) || (!(auth.getAuthorization().getBit(2)))) {
+						// create and propagate response APDU
+						ResponseApdu resp = new ResponseApdu(Iso7816.SW_6982_SECURITY_STATUS_NOT_SATISFIED);
+						processingData.updateResponseAPDU(this, "Restricted Identification only allowed for authorized terminals", resp);
+						return;
+					}
+				}
+				
+				PrivateKey staticPrivateKey = staticKeyPair.getPrivate();
 				
 				ConstructedTlvDataObject responseData = new ConstructedTlvDataObject(
 						TlvConstants.TAG_7C);
 				try {
-					if (dynamicAuthenticationData
-							.getTagField(RI_FIRST_SECTOR_KEY_TAG) != null) {
+					if (dynamicAuthenticationData.getTlvDataObject(RI_FIRST_SECTOR_KEY_TAG) != null) {
 						responseData.addTlvDataObject(handleSectorKey(
-								RI_FIRST_SECTOR_KEY_TAG, staticPrivateKey,
+								RI_FIRST_SECTOR_KEY_TAG,
+								staticPrivateKey,
 								dynamicAuthenticationData,
 								publicKeyCheckingHash,
-								firstSectorPublicKeyHash, TlvConstants.TAG_81));
+								firstSectorPublicKeyHash,
+								TlvConstants.TAG_81));
 
 					}
-					if (dynamicAuthenticationData
-							.getTagField(RI_SECOND_SECTOR_KEY_TAG) != null) {
-						responseData
-								.addTlvDataObject(handleSectorKey(
-										RI_SECOND_SECTOR_KEY_TAG,
-										staticPrivateKey,
-										dynamicAuthenticationData,
-										publicKeyCheckingHash,
-										secondSectorPublicKeyHash,
-										TlvConstants.TAG_83));
+					if (dynamicAuthenticationData.getTlvDataObject(RI_SECOND_SECTOR_KEY_TAG) != null) {
+						responseData.addTlvDataObject(handleSectorKey(
+								RI_SECOND_SECTOR_KEY_TAG,
+								staticPrivateKey,
+								dynamicAuthenticationData,
+								publicKeyCheckingHash,
+								secondSectorPublicKeyHash,
+								TlvConstants.TAG_83));
 					}
 				} catch (GeneralSecurityException e) {
 					// create and propagate response APDU
@@ -289,6 +399,7 @@ public class RiProtocol implements Protocol, Iso7816, ApduSpecificationConstants
 					processingData.updateResponseAPDU(this,
 							"the given public key is invalid", resp);
 				}
+				
 				if (responseData.getNoOfElements() > 0) {
 					// create and propagate response APDU
 					ResponseApdu resp = new ResponseApdu(new TlvDataObjectContainer(responseData), Iso7816.SW_9000_NO_ERROR);
@@ -302,20 +413,25 @@ public class RiProtocol implements Protocol, Iso7816, ApduSpecificationConstants
 							"no sector identifiers could be calculated becaus of missing or incorrect input data", resp);
 					return;
 				}
+			} else {
+				// create and propagate response APDU
+				ResponseApdu resp = new ResponseApdu(Iso7816.SW_6985_CONDITIONS_OF_USE_NOT_SATISFIED);
+				processingData.updateResponseAPDU(this, "Restricted Identification requires preceding Terminal Authentication", resp);
 			}
 		}
-		
-		
 
 	}
 
 	private void processCommandSetAt(ProcessingData processingData) {
+
 		TlvDataObject cryptographicMechanismReferenceData = processingData
 				.getCommandApdu().getCommandDataObjectContainer()
-				.getTagField(TlvConstants.TAG_80);
+				.getTlvDataObject(TlvConstants.TAG_80);
 		TlvDataObject privateKeyReferenceData = processingData.getCommandApdu()
 				.getCommandDataObjectContainer()
-				.getTagField(TlvConstants.TAG_84);
+				.getTlvDataObject(TlvConstants.TAG_84);
+		
+		
 
 		if (cryptographicMechanismReferenceData != null) {
 			try{
@@ -342,13 +458,12 @@ public class RiProtocol implements Protocol, Iso7816, ApduSpecificationConstants
 			privateKeyReference = Utils
 					.getIntFromUnsignedByteArray(privateKeyReferenceData
 							.getValueField());
+			
 			KeyIdentifier keyIdentifier = new KeyIdentifier(privateKeyReference);
-			CardObject cardObject = cardState.getObject(keyIdentifier,
-					Scope.FROM_MF);
-
-			if ((cardObject instanceof KeyObject)) {
-				KeyObject KeyObject = (KeyObject) cardObject;
-				staticKeyPair = KeyObject.getKeyPair();
+			CardObject cardObject = CardObjectUtils.findObject(cardState.getMasterFile(), keyIdentifier);
+			
+			if ((cardObject instanceof KeyPairObject)) {
+				staticKeyObject = (KeyPairObject) cardObject;
 			} else {
 				ResponseApdu resp = new ResponseApdu(
 						Iso7816.SW_6A88_REFERENCE_DATA_NOT_FOUND);
@@ -370,46 +485,7 @@ public class RiProtocol implements Protocol, Iso7816, ApduSpecificationConstants
 		ResponseApdu resp = new ResponseApdu(Iso7816.SW_9000_NO_ERROR);
 		processingData.updateResponseAPDU(this, "Command SetAt successfully processed", resp);
 	}
-
-	@Override
-	public Collection<ApduSpecification> getApduSet() {
-		if (apdus == null) {
-			apdus = createApduSpecifications();
-		}
-		return apdus;
-	}
-
-	private HashSet<ApduSpecification> createApduSpecifications() {
-		HashSet<ApduSpecification> apdus = new HashSet<>();
-		ApduSpecification apduSpecification = new ApduSpecification("Set AT");
-		apduSpecification.setIsoFormat(ISO_FORMAT_FIRSTINTERINDUSTRY);
-		apduSpecification.setIsoCase(ISO_CASE_3);
-		apduSpecification.setChaining(false);
-		apduSpecification.setIns(INS_22_MANAGE_SECURITY_ENVIRONMENT);
-		apduSpecification.setP1((byte) 0xC1);
-		apduSpecification.setP2((byte) 0xA4);
-		TlvSpecification tagSpecification = new TlvSpecification(TAG_80);
-		apduSpecification.addTag(tagSpecification);
-		tagSpecification = new TlvSpecification(TAG_84);
-		tagSpecification.setRequired(REQ_OPTIONAL);
-		apduSpecification.addTag(tagSpecification);
-		apduSpecification.setInitialApdu();
-		apdus.add(apduSpecification);
-		
-
-		apduSpecification = new ApduSpecification("General Authenticate");
-		apduSpecification.setIsoFormat(ISO_FORMAT_FIRSTINTERINDUSTRY);
-		apduSpecification.setIsoCase(ISO_CASE_3);
-		apduSpecification.setChaining(false);
-		apduSpecification.setIns(INS_86_GENERAL_AUTHENTICATE);
-		apduSpecification.setP1((byte) 0x00);
-		apduSpecification.setP2((byte) 0x00);
-		tagSpecification = new TlvSpecification(TAG_7C);
-		apduSpecification.addTag(tagSpecification);
-		apdus.add(apduSpecification);
-		return apdus;
-	}
-
+	
 	@Override
 	public String getIDString() {
 		return "Restricted Identification";
@@ -418,6 +494,11 @@ public class RiProtocol implements Protocol, Iso7816, ApduSpecificationConstants
 	@Override
 	public void reset() {
 		privateKeyReference = -1;
+	}
+	
+	@Override
+	public boolean isMoveToStackRequested() {
+		return false;
 	}
 
 }

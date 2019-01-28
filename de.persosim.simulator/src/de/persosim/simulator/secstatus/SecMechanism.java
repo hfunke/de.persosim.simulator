@@ -11,10 +11,6 @@ package de.persosim.simulator.secstatus;
  * SecConditions can refer to SecMechanisms and rely on the provided data to
  * perform the condition checking.
  * 
- * This is only a flagging interface and does not include any own functionality
- * in terms of methods. But the contract provided by this JavaDoc needs to be
- * adhered to by all classes implementing this interface.
- * 
  * @author amay
  * 
  */
@@ -27,4 +23,10 @@ public interface SecMechanism {
 	 * @return true, if deletion is necessary
 	 */
 	boolean needsDeletionInCaseOf(SecurityEvent event);
+	
+	/**
+	 * This function returns the key which identifies the {@link SecMechanism}
+	 * @return a class object which identifies the {@link SecMechanism}
+	 */
+	public Class<? extends SecMechanism> getKey();
 }

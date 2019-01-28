@@ -1,7 +1,7 @@
 package de.persosim.simulator.cardobjects;
 
-import javax.xml.bind.annotation.XmlRootElement;
-import javax.xml.bind.annotation.XmlValue;
+import de.persosim.simulator.utils.HexString;
+import de.persosim.simulator.utils.Utils;
 
 /**
  * Identifies for a {@link CardFile} using the identifier stored in the file
@@ -10,18 +10,9 @@ import javax.xml.bind.annotation.XmlValue;
  * @author mboonk
  * 
  */
-@XmlRootElement
 public class FileIdentifier extends AbstractCardObjectIdentifier {
 
-	@XmlValue
 	private int identifier;
-	
-	/**
-	 * Default constructor for usage with JAXB.
-	 * 
-	 */
-	public FileIdentifier() {
-	}
 	
 	/**
 	 * Default constructor.
@@ -32,13 +23,15 @@ public class FileIdentifier extends AbstractCardObjectIdentifier {
 	public FileIdentifier(int identifier) {
 		this.identifier = identifier;
 	}
-
-	@Override
-	public boolean matches(CardObjectIdentifier object) {
-		if (object instanceof FileIdentifier) {
-			return ((FileIdentifier) object).getFileIdentifier() == identifier;
-		}
-		return false;
+	
+	/**
+	 * Constructor using a byte array.
+	 * 
+	 * @param identifier
+	 *            to be matched
+	 */
+	public FileIdentifier(byte [] identifier) {
+		this.identifier = Utils.getIntFromUnsignedByteArray(identifier);
 	}
 	
 	/**
@@ -47,4 +40,32 @@ public class FileIdentifier extends AbstractCardObjectIdentifier {
 	public int getFileIdentifier() {
 		return identifier;
 	}
+	@Override
+	public int hashCode() {
+		final int prime = 31;
+		int result = 1;
+		result = prime * result + identifier;
+		return result;
+	}
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (obj == null)
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		FileIdentifier other = (FileIdentifier) obj;
+		if (identifier != other.identifier)
+			return false;
+		return true;
+	}
+	
+	
+	
+	@Override
+	public String toString() {
+		return "0x"+HexString.encode(Utils.removeLeadingZeroBytes(Utils.toUnsignedByteArray(identifier)))+" ("+identifier+")";
+	}
+	
 }

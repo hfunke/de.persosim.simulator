@@ -8,6 +8,7 @@ import java.security.PublicKey;
 import java.security.spec.AlgorithmParameterSpec;
 import java.security.spec.KeySpec;
 
+import de.persosim.simulator.tlv.ConstructedTlvDataObject;
 import de.persosim.simulator.tlv.TlvTag;
 
 /**
@@ -67,6 +68,13 @@ public interface DomainParameterSet {
 	public abstract byte[] encodePublicKey(PublicKey publicKey);
 	
 	/**
+	 * This method returns the minimum encoding of the provided private key.
+	 * @param privateKey the private key to be encoded
+	 * @return the minimum encoding of the provided public key
+	 */
+	public byte[] encodePrivateKey(PrivateKey privateKey);
+	
+	/**
 	 * This method returns the tag used to identify the encoding of the public key in the authentication token input data.
 	 * @return the tag used to identify the public key encoding
 	 */
@@ -82,12 +90,25 @@ public interface DomainParameterSet {
 	 * @throws NoSuchAlgorithmException
 	 *             if the needed algorithms are not available
 	 */
-	public abstract byte[] comp(PublicKey publicKey) throws NoSuchAlgorithmException;
+	public abstract byte[] comp(PublicKey publicKey);
 	
 	/**
 	 * Returns an {@link AlgorithmParameterSpec} representing (a subset of) the data stored in this object.
 	 * @return an {@link AlgorithmParameterSpec} representation of this object
 	 */
 	public abstract AlgorithmParameterSpec getKeySpec();
+
+	/**
+	 * Return an AlgorithmIdentifier ASN1 representation of this object. 
+	 * @return an AlgorithmIdentifier ASN1 representation of this object.
+	 */
+	public abstract ConstructedTlvDataObject getAlgorithmIdentifier();
+	
+	/**
+	 * Returns an {@link AlgorithmParameterSpec} object which is as close to this object as possible.
+	 * The object may be used e.g. for key generation.
+	 * @return an {@link AlgorithmParameterSpec} object which is as close to this object as possible
+	 */
+	public abstract AlgorithmParameterSpec getAlgorithmParameterSpec();
 	
 }

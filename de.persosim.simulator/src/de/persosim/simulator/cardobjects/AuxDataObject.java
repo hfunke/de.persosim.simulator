@@ -1,20 +1,13 @@
 package de.persosim.simulator.cardobjects;
 
-import java.nio.file.AccessDeniedException;
 import java.util.Collection;
-import java.util.HashSet;
 
-import javax.xml.bind.annotation.XmlElement;
-
+import de.persosim.simulator.exception.AccessDeniedException;
+import de.persosim.simulator.protocols.Oid;
 import de.persosim.simulator.protocols.ta.AuthenticatedAuxiliaryData;
 
 public abstract class AuxDataObject extends AbstractCardObject {
-	@XmlElement
 	OidIdentifier identifier;
-	
-	public AuxDataObject(){
-		
-	}
 	
 	public AuxDataObject(OidIdentifier identifier){
 		this.identifier = identifier;
@@ -22,10 +15,14 @@ public abstract class AuxDataObject extends AbstractCardObject {
 	
 	@Override
 	public Collection<CardObjectIdentifier> getAllIdentifiers() {
-		HashSet<CardObjectIdentifier> result = new HashSet<>();
+		Collection<CardObjectIdentifier> result = super.getAllIdentifiers();
 		result.add(identifier);
 		return result;
 	}
 
+	public Oid getOid(){
+		return identifier.getOid();
+	}
+	
 	public abstract boolean verify(AuthenticatedAuxiliaryData current) throws AccessDeniedException;
 }

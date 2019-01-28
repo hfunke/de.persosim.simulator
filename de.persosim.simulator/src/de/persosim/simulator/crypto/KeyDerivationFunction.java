@@ -1,11 +1,16 @@
 package de.persosim.simulator.crypto;
 
+import static org.globaltester.logging.BasicLogger.log;
+
 import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.util.Arrays;
 
+import org.globaltester.cryptoprovider.Crypto;
+import org.globaltester.logging.tags.LogLevel;
+import de.persosim.simulator.utils.HexString;
 import de.persosim.simulator.utils.Utils;
 
 /**
@@ -49,9 +54,9 @@ public class KeyDerivationFunction {
 		
 		try {
 			if(keyLengthInBytes <= 16) {
-				this.messageDigest =  MessageDigest.getInstance(DIGEST_ORDER[0]);
+				this.messageDigest =  MessageDigest.getInstance(DIGEST_ORDER[0], Crypto.getCryptoProvider());
 			} else{
-				this.messageDigest =  MessageDigest.getInstance(DIGEST_ORDER[1]);
+				this.messageDigest =  MessageDigest.getInstance(DIGEST_ORDER[1], Crypto.getCryptoProvider());
 			}
 		} catch (NoSuchAlgorithmException e) {
 			/* this is not supposed to happen */
@@ -70,7 +75,8 @@ public class KeyDerivationFunction {
 	 */
 	public byte[] deriveKey(byte[] secret, byte[] nonce, byte[] counter) {
 		int inputLength;
-		byte[] input, digest;
+		byte[] input;
+		byte[] digest;
 		
 		if(secret == null) {throw new NullPointerException();}
 		if(counter == null) {throw new NullPointerException();}
@@ -79,22 +85,25 @@ public class KeyDerivationFunction {
 		
 		if(nonce != null) {
 			inputLength += nonce.length;
+			log(KeyDerivationFunction.class, "deriving key from secret \"" + HexString.encode(secret) + "\", nonce \"" + HexString.encode(nonce) + "\" and counter \"" + HexString.encode(counter) +  "\"", LogLevel.DEBUG);
+		} else{
+			log(KeyDerivationFunction.class, "deriving key from secret \"" + HexString.encode(secret) + "\", no nonce and counter \"" + HexString.encode(counter) +  "\"", LogLevel.DEBUG);
 		}
 		
 		if(inputLength <= 0) {
 			throw new IllegalArgumentException("KDF input length must be > 0");
 		}
 		
-		input = new byte[inputLength];
-		
 		if(nonce == null) {
 			input = Utils.concatByteArrays(secret, counter);
 		} else{
-			input = Utils.concatByteArrays(secret, nonce);
-			input = Utils.concatByteArrays(input, counter);
+			input = Utils.concatByteArrays(secret, nonce, counter);
 		}
 		
+		log(KeyDerivationFunction.class, "message digest input is: " + HexString.encode(input), LogLevel.DEBUG);
+		log(KeyDerivationFunction.class, "message digest algorithm is: " + messageDigest.getAlgorithm() + " of " + keyLengthInBytes + " bytes length", LogLevel.DEBUG);
 		digest = this.messageDigest.digest(input);
+		log(KeyDerivationFunction.class, "message digest result is: " + HexString.encode(digest), LogLevel.DEBUG);
 		
 		return Arrays.copyOf(digest, this.keyLengthInBytes);
 	}

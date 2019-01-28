@@ -106,17 +106,13 @@ public class TlvValuePlain extends TlvValue {
 	}
 	
 	@Override
-	public TlvValuePlain clone() {
+	public TlvValuePlain copy() {
 		return new TlvValuePlain(this.valueField);
 	}
 	
 	@Override
 	public boolean isValidBerEncoding() {
-		if(valueField == null) {
-			return false;
-		} else{
-			return true;
-		}
+		return valueField != null;
 	}
 	
 	@Override

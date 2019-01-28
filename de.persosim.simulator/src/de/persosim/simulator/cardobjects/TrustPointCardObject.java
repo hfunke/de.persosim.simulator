@@ -1,14 +1,10 @@
 package de.persosim.simulator.cardobjects;
 
 import java.util.Collection;
-import java.util.HashSet;
-
-import javax.xml.bind.annotation.XmlElement;
-import javax.xml.bind.annotation.XmlRootElement;
 
 import de.persosim.simulator.crypto.certificates.CardVerifiableCertificate;
-import de.persosim.simulator.crypto.certificates.PublicKeyReference;
 import de.persosim.simulator.exception.CertificateUpdateException;
+import de.persosim.simulator.secstatus.SecStatus;
 
 /**
  * This describes a trust point consisting of 2 public keys stored on the card.
@@ -18,20 +14,12 @@ import de.persosim.simulator.exception.CertificateUpdateException;
  * @author mboonk
  * 
  */
-@XmlRootElement
 public class TrustPointCardObject extends AbstractCardObject {
 	
-	@XmlElement
 	CardVerifiableCertificate currentCertificate;
-	@XmlElement
 	CardVerifiableCertificate previousCertificate;
 	
-	@XmlElement
 	TrustPointIdentifier identifier;
-
-	
-	public TrustPointCardObject() {
-	}
 
 	public TrustPointCardObject(TrustPointIdentifier identifier,
 			CardVerifiableCertificate currentCertificate) {
@@ -41,7 +29,7 @@ public class TrustPointCardObject extends AbstractCardObject {
 
 	@Override
 	public Collection<CardObjectIdentifier> getAllIdentifiers() {
-		Collection<CardObjectIdentifier> result = new HashSet<>();
+		Collection<CardObjectIdentifier> result = super.getAllIdentifiers();
 		result.add(identifier);
 		return result;
 	}
@@ -54,7 +42,7 @@ public class TrustPointCardObject extends AbstractCardObject {
 	}
 
 	/**
-	 * @return the previous certificate that defines this trustpoint
+	 * @return the previous certificate that defines this trustpoint or null if none set
 	 */
 	public CardVerifiableCertificate getPreviousCertificate() {
 		return previousCertificate;
@@ -71,17 +59,28 @@ public class TrustPointCardObject extends AbstractCardObject {
 	 * @param newCertificate
 	 * @throws CertificateUpdateException
 	 */
-	public void updateTrustpoint(PublicKeyReference newReference,
-			CardVerifiableCertificate newCertificate) throws CertificateUpdateException {
-		//XXX MBK check access rights
+	public void updateTrustpoint(CardVerifiableCertificate newCertificate) throws CertificateUpdateException {
+		// IMPL check access rights
 
-		// XXX MBK TR-03105 here should be a test for the CHR (TR-03110 v2.10 Part 2 A.6.2.1)
+		// IMPL TR-03105 here should be a test for the CHR (TR-03110 v2.10 Part 2 A.6.2.1)
 		//if (previousCertificate != null || !newCertificate.getCertificateHolderReference().equals(currentCertificate.getCertificateHolderReference())){
 		//	throw new CertificateUpdateException("The old holder reference does not fit the new one");
 		//}
 		
 		previousCertificate = currentCertificate;
 		currentCertificate = newCertificate;
+	}
+	
+	/**
+	 * Clears the content of this object, e.g. removes all certificates. This is
+	 * only possible if the {@link Iso7816LifeCycleState} allows this
+	 * modification.
+	 */
+	public void clear(){
+		if (SecStatus.checkAccessConditions(getLifeCycleState())){
+			previousCertificate = null;
+			currentCertificate = null;
+		}
 	}
 
 }

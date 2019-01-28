@@ -9,8 +9,7 @@ import de.persosim.simulator.utils.Utils;
  * @author slutters
  *
  */
-//TODO cleanup 
-//consistently  throw Exceptions for unsupported inputs
+// IMPL consistently  throw Exceptions for unsupported inputs
 public abstract class Iso7816Lib implements Iso7816 {
 	
 	public static final short MASK_BYTE_TO_SHORT = (short) 0xFF;
@@ -447,10 +446,10 @@ public abstract class Iso7816Lib implements Iso7816 {
 	 * Returns the kind of secure messaging the provided APDU's CLA byte indicates
 	 * according to ISO 7816-4:
 	 * <ul>
-	 * <li>0  0  — No SM or no indication</li> 
-	 * <li>0  1  — Proprietary SM format </li>
-	 * <li>1  0  — SM according to 6, command header not processed according to 6.2.3.1</li>
-	 * <li>1  1  — SM according to 6, command header authenticated according to 6.2.3.1</li>
+	 * <li>0  0  - No SM or no indication</li> 
+	 * <li>0  1  - Proprietary SM format </li>
+	 * <li>1  0  - SM according to 6, command header not processed according to 6.2.3.1</li>
+	 * <li>1  1  - SM according to 6, command header authenticated according to 6.2.3.1</li>
 	 * </ul>
 	 * <p/>
 	 * @param apdu the APDU
@@ -473,14 +472,7 @@ public abstract class Iso7816Lib implements Iso7816 {
 				cla = (byte) (cla & (byte) 0x20);
 				return (byte) (cla >> 4);
 			} else{
-				if(isoFormat >= ISO_FORMAT_PROPRIETARY) {
-
-					//FIXME MBK remove this block when proprietary apdus are implemented
-					if (cla == (byte) 0x8C && apdu[OFFSET_INS] == INS_20_VERIFY){
-						cla = (byte) (cla & (byte) 0x0C);
-						return (byte) (cla >> 2);	
-					}
-					
+				if(isoFormat >= ISO_FORMAT_PROPRIETARY) {					
 					ISO7816Exception.throwIt(Iso7816.SW_6E00_CLA_NOT_SUPPORTED);
 				} else{
 					// exception is thrown implicitly by called function.
@@ -494,10 +486,10 @@ public abstract class Iso7816Lib implements Iso7816 {
 	/**
 	 * Returns whether the provided APDU matches the provided secure messaging indication
 	 * according to ISO 7816-4:
-	 * 0  0  — No SM or no indication 
-	 * 0  1  — Proprietary SM format 
-	 * 1  0  — SM according to 6, command header not processed according to 6.2.3.1
-	 * 1  1  — SM according to 6, command header authenticated according to 6.2.3.1
+	 * 0  0  - No SM or no indication 
+	 * 0  1  - Proprietary SM format 
+	 * 1  0  - SM according to 6, command header not processed according to 6.2.3.1
+	 * 1  1  - SM according to 6, command header authenticated according to 6.2.3.1
 	 * @param apdu the APDU
 	 * @param specification some secure messaging status
 	 * @return whether the provided APDU matches the provided secure messaging status
@@ -547,9 +539,6 @@ public abstract class Iso7816Lib implements Iso7816 {
 				throw new IllegalArgumentException(
 						"Unsupported status for further interindustry CLA");
 			}
-		case ISO_FORMAT_PROPRIETARY:
-			//FIXME MBK remove or implement correctly
-			return 0;
 		default:
 			throw new IllegalArgumentException("Format of CLA not supported");
 		}
@@ -745,8 +734,8 @@ public abstract class Iso7816Lib implements Iso7816 {
 			
 			if(isExtendedLengthLCLE(apdu)) {
 				short retVal = Utils.concatenate(apdu[apduLength - 2], apdu[apduLength - 1]);
-				if (retVal == 0) {
-					return 65536;
+				if (retVal <= 0) {
+					return 65536 + retVal;
 				} else {
 					return retVal;
 				}
@@ -761,6 +750,14 @@ public abstract class Iso7816Lib implements Iso7816 {
 			//L_e absent, thus N_e is zero
 			return 0;
 		}
+	}
+	
+	public static short getStatusWord(byte [] responseApdu) {
+		if (responseApdu.length < 2) {
+			throw new IllegalArgumentException("APDU too short for status word");
+		}
+		
+		return Utils.concatenate(responseApdu[responseApdu.length - 2], responseApdu[responseApdu.length - 1]);
 	}
 	
 	/*--------------------------------------------------------------------------------*/

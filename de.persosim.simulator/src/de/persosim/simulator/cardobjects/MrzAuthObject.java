@@ -3,11 +3,9 @@ package de.persosim.simulator.cardobjects;
 import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.security.NoSuchProviderException;
 
-import javax.xml.bind.annotation.XmlRootElement;
+import org.globaltester.cryptoprovider.Crypto;
 
-import de.persosim.simulator.crypto.Crypto;
 import de.persosim.simulator.documents.Mrz;
 import de.persosim.simulator.documents.MrzTD1;
 
@@ -17,17 +15,16 @@ import de.persosim.simulator.documents.MrzTD1;
  * @author mboonk
  * 
  */
-//XXX MrzAuthObject, relies on TD1 format
-@XmlRootElement
+//IMPL MrzAuthObject, relies on TD1 format
 public class MrzAuthObject extends PasswordAuthObject {
-
-	public MrzAuthObject() {
-	}
 	
+	protected String mrz;
+		
 	public MrzAuthObject(AuthObjectIdentifier identifier, String mrz)
-			throws NoSuchAlgorithmException, NoSuchProviderException,
+			throws NoSuchAlgorithmException,
 			IOException {
 		super(identifier, constructMrzPassword(mrz), "MRZ");
+		this.mrz = mrz;
 	}
 
 	/**
@@ -36,11 +33,10 @@ public class MrzAuthObject extends PasswordAuthObject {
 	 * 
 	 * @return the input String used to compute the common secret from the MRZ
 	 * @throws IOException 
-	 * @throws NoSuchProviderException 
 	 * @throws NoSuchAlgorithmException 
 	 */
 	private static byte[] constructMrzPassword(String machineReadableZone)
-			throws NoSuchAlgorithmException, NoSuchProviderException, IOException {
+			throws NoSuchAlgorithmException, IOException {
 		StringBuilder sb;
 		Mrz mrz;
 
@@ -66,4 +62,9 @@ public class MrzAuthObject extends PasswordAuthObject {
 		MessageDigest md = MessageDigest.getInstance("SHA-1", Crypto.getCryptoProvider());
 		return md.digest(sb.toString().getBytes("UTF-8"));
 	}
+
+	public String getMrz() {
+		return mrz;
+	}
+	
 }

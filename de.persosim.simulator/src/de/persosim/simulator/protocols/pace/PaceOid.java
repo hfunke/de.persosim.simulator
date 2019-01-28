@@ -3,24 +3,18 @@ package de.persosim.simulator.protocols.pace;
 import java.security.InvalidParameterException;
 import java.util.Arrays;
 
-import javax.xml.bind.annotation.XmlRootElement;
-
 import de.persosim.simulator.crypto.CryptoSupport;
 import de.persosim.simulator.crypto.CryptoSupportAes;
 import de.persosim.simulator.crypto.CryptoUtil;
-import de.persosim.simulator.protocols.Oid;
+import de.persosim.simulator.protocols.GenericOid;
 import de.persosim.simulator.utils.HexString;
 
-@XmlRootElement
-public class PaceOid extends Oid implements Pace {
+public class PaceOid extends GenericOid implements Pace {
 	public static final int HASHCODEMULTIPLICATOR = 3;
 	
 	protected String idString;
 	
 	/*----------------------------------------------------------------*/
-	
-	public PaceOid() {
-	}
 	
 	/**
 	 * This constructor constructs a {@link PaceOid} based on a byte array representation of a Pace OID.
@@ -64,13 +58,7 @@ public class PaceOid extends Oid implements Pace {
 	 */
 	public String getKeyAgreementName() {
 		switch (this.getKeyAgreementAndMappingAsByte()) {
-		case Pace.DH_GM:
-			return "DH";
 		case Pace.ECDH_GM:
-			return "ECDH";
-		case Pace.DH_IM:
-			return "DH";
-		case Pace.ECDH_IM:
 			return "ECDH";
 		default:
 			throw new InvalidParameterException("no or invalid key agreement selected");
@@ -83,14 +71,8 @@ public class PaceOid extends Oid implements Pace {
 	 */
 	public String getMappingName() {
 		switch (this.getKeyAgreementAndMappingAsByte()) {
-		case Pace.DH_GM:
-			return "GM";
 		case Pace.ECDH_GM:
 			return "GM";
-		case Pace.DH_IM:
-			return "IM";
-		case Pace.ECDH_IM:
-			return "IM";
 		default:
 			throw new InvalidParameterException("no or invalid mapping selected");
 		}
@@ -109,26 +91,30 @@ public class PaceOid extends Oid implements Pace {
 		}
 	}
 	
+	protected CryptoSupport cryptoSupportCache = null;
+	
 	/**
 	 * This method returns the {@link CryptoSupport} object that provides support for the selected symmetric cipher.
 	 * @return the {@link CryptoSupport} object that provides support for the selected symmetric cipher
 	 */
-	protected CryptoSupport cryptoSupportCache = null;
 	public CryptoSupport getCryptoSupport() {
 		if(cryptoSupportCache == null) {
-			String cipherName = getSymmetricCipherAlgorithmNameModePadding();
-			String macName = getMacName();
-			
-			switch (CryptoUtil.getCipherNameAsString(cipherName)) {
-			case "AES":
-				cryptoSupportCache = new CryptoSupportAes(cipherName, macName);
-				break;
-			default:
-				throw new IllegalArgumentException("algorithm " + cipherName + " is unknown or not supported");
-			}
+			cryptoSupportCache = createCryptoSupport();
 		}
 		
 		return cryptoSupportCache;
+	}
+
+	protected CryptoSupport createCryptoSupport() {
+		String cipherName = getSymmetricCipherAlgorithmNameModePadding();
+		String macName = getMacName();
+		
+		switch (CryptoUtil.getCipherNameAsString(cipherName)) {
+		case "AES":
+			return new CryptoSupportAes(cipherName, macName);
+		default:
+			throw new IllegalArgumentException("algorithm " + cipherName + " is unknown or not supported");
+		}
 	}
 	
 	/*----------------------------------------------------------------*/
@@ -139,8 +125,6 @@ public class PaceOid extends Oid implements Pace {
 	 */
 	public String getSymmetricCipherAlgorithmNameModePadding() {
 		switch (this.getSymmetricCipherAndKeySizeAsByte()) {
-		case Pace.DES3_CBC_CBC:
-			return "DESede/CBC/NoPadding";
 		case Pace.AES_CBC_CMAC_128:
 			return "AES/CBC/NoPadding";
 		case Pace.AES_CBC_CMAC_192:
@@ -182,12 +166,6 @@ public class PaceOid extends Oid implements Pace {
 	 */
 	public int getSymmetricCipherKeyLengthInBytes() {
 		switch (this.getSymmetricCipherAndKeySizeAsByte()) {
-		case Pace.DES3_CBC_CBC:
-			/* 
-			 * this is the actual key length,
-			 * effective key length is only 14 bytes as 1 bit per byte is parity information
-			 */
-			return 16;
 		case Pace.AES_CBC_CMAC_128:
 			return 16;
 		case Pace.AES_CBC_CMAC_192:
@@ -205,8 +183,6 @@ public class PaceOid extends Oid implements Pace {
 	 */
 	public String getMacName() {
 		switch (this.getSymmetricCipherAlgorithmName()) {
-		case "DESede":
-			return "ISO9797ALG3WITHISO7816-4PADDING";
 		case "AES":
 			return "aescmac";
 		default:
@@ -236,26 +212,10 @@ public class PaceOid extends Oid implements Pace {
 	
 	/*----------------------------------------------------------------*/
 	
-	public static String getStringRepresentation(byte[] oidByteArray) {
-		if (Arrays.equals(oidByteArray, id_PACE_DH_GM_3DES_CBC_CBC))     return id_PACE_DH_GM_3DES_CBC_CBC_STRING;
-		if (Arrays.equals(oidByteArray, id_PACE_DH_GM_AES_CBC_CMAC_128)) return id_PACE_DH_GM_AES_CBC_CMAC_128_STRING;
-		if (Arrays.equals(oidByteArray, id_PACE_DH_GM_AES_CBC_CMAC_192)) return id_PACE_DH_GM_AES_CBC_CMAC_192_STRING;
-		if (Arrays.equals(oidByteArray, id_PACE_DH_GM_AES_CBC_CMAC_256)) return id_PACE_DH_GM_AES_CBC_CMAC_256_STRING;
-		
-		if (Arrays.equals(oidByteArray, id_PACE_ECDH_GM_3DES_CBC_CBC))     return id_PACE_ECDH_GM_3DES_CBC_CBC_STRING;
+	public String getStringRepresentation(byte[] oidByteArray) {		
 		if (Arrays.equals(oidByteArray, id_PACE_ECDH_GM_AES_CBC_CMAC_128)) return id_PACE_ECDH_GM_AES_CBC_CMAC_128_STRING;
 		if (Arrays.equals(oidByteArray, id_PACE_ECDH_GM_AES_CBC_CMAC_192)) return id_PACE_ECDH_GM_AES_CBC_CMAC_192_STRING;
 		if (Arrays.equals(oidByteArray, id_PACE_ECDH_GM_AES_CBC_CMAC_256)) return id_PACE_ECDH_GM_AES_CBC_CMAC_256_STRING;
-		 
-		if (Arrays.equals(oidByteArray, id_PACE_DH_IM_3DES_CBC_CBC))     return id_PACE_DH_IM_3DES_CBC_CBC_STRING;
-		if (Arrays.equals(oidByteArray, id_PACE_DH_IM_AES_CBC_CMAC_128)) return id_PACE_DH_IM_AES_CBC_CMAC_128_STRING;
-		if (Arrays.equals(oidByteArray, id_PACE_DH_IM_AES_CBC_CMAC_192)) return id_PACE_DH_IM_AES_CBC_CMAC_192_STRING;
-		if (Arrays.equals(oidByteArray, id_PACE_DH_IM_AES_CBC_CMAC_256)) return id_PACE_DH_IM_AES_CBC_CMAC_256_STRING;
-		 
-		if (Arrays.equals(oidByteArray, id_PACE_ECDH_IM_3DES_CBC_CBC))     return id_PACE_ECDH_IM_3DES_CBC_CBC_STRING;
-		if (Arrays.equals(oidByteArray, id_PACE_ECDH_IM_AES_CBC_CMAC_128)) return id_PACE_ECDH_IM_AES_CBC_CMAC_128_STRING;
-		if (Arrays.equals(oidByteArray, id_PACE_ECDH_IM_AES_CBC_CMAC_192)) return id_PACE_ECDH_IM_AES_CBC_CMAC_192_STRING;
-		if (Arrays.equals(oidByteArray, id_PACE_ECDH_IM_AES_CBC_CMAC_256)) return id_PACE_ECDH_IM_AES_CBC_CMAC_256_STRING;
 		
 		return null;
 	}

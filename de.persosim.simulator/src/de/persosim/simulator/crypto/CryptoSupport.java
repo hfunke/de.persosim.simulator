@@ -1,7 +1,7 @@
 package de.persosim.simulator.crypto;
 
-import static de.persosim.simulator.utils.PersoSimLogger.log;
-import static de.persosim.simulator.utils.PersoSimLogger.logException;
+import static org.globaltester.logging.BasicLogger.log;
+import static org.globaltester.logging.BasicLogger.logException;
 
 import java.security.GeneralSecurityException;
 import java.security.InvalidAlgorithmParameterException;
@@ -16,6 +16,8 @@ import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.Mac;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+
+import org.globaltester.cryptoprovider.Crypto;
 
 import de.persosim.simulator.utils.HexString;
 
@@ -53,7 +55,8 @@ public abstract class CryptoSupport {
 	}
 
 	public void setCipherAlgorithmNameModePadding(String cipherAlgorithmNameModePadding) {
-		String cipherAlgorithmExpected, cipherAlgorithmReceived;
+		String cipherAlgorithmExpected;
+		String cipherAlgorithmReceived;
 		
 		cipherAlgorithmExpected = this.getCipherAlgorithm();
 		cipherAlgorithmReceived = CryptoUtil.getCipherNameAsString(cipherAlgorithmNameModePadding);

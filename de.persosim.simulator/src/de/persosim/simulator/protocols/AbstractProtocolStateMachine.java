@@ -1,27 +1,28 @@
 package de.persosim.simulator.protocols;
 
-import static de.persosim.simulator.utils.PersoSimLogger.DEBUG;
-import static de.persosim.simulator.utils.PersoSimLogger.log;
+import static org.globaltester.logging.BasicLogger.log;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 
+import org.globaltester.logging.InfoSource;
+import org.globaltester.logging.tags.LogLevel;
 import de.persosim.simulator.apdu.CommandApdu;
 import de.persosim.simulator.apdu.ResponseApdu;
 import de.persosim.simulator.apdumatching.ApduSpecification;
 import de.persosim.simulator.apdumatching.ApduSpecificationConstants;
 import de.persosim.simulator.apdumatching.TlvSpecification;
+import de.persosim.simulator.cardobjects.MasterFile;
 import de.persosim.simulator.platform.CardStateAccessor;
 import de.persosim.simulator.platform.Iso7816;
 import de.persosim.simulator.platform.Iso7816Lib;
+import de.persosim.simulator.platform.PlatformUtil;
 import de.persosim.simulator.processing.ProcessingData;
 import de.persosim.simulator.statemachine.AbstractStateMachine;
 import de.persosim.simulator.tlv.TlvDataObject;
 import de.persosim.simulator.tlv.TlvPath;
 import de.persosim.simulator.tlv.TlvTag;
-import de.persosim.simulator.utils.InfoSource;
 
 /**
  * Generic super class for {@link Protocol} implementations with state machine code.
@@ -72,13 +73,8 @@ public abstract class AbstractProtocolStateMachine extends AbstractStateMachine 
 	}
 
 	@Override
-	public Collection<ApduSpecification> getApduSet() {
-		return new HashSet<ApduSpecification>(apdus.values());
-	}
-
-	@Override
-	public Collection<TlvDataObject> getSecInfos() {
-		return Collections.emptySet();
+	public Collection<TlvDataObject> getSecInfos(SecInfoPublicity publicity, MasterFile mf) {
+		return new HashSet<>();
 	}
 	
 	@Override
@@ -108,7 +104,7 @@ public abstract class AbstractProtocolStateMachine extends AbstractStateMachine 
 	
 	@Override
 	public void logs(String state) {
-		log(this, "State changed to " + state, DEBUG);
+		log(this, "State changed to " + state, LogLevel.DEBUG);
 	}
 
 	@Override
@@ -150,7 +146,7 @@ public abstract class AbstractProtocolStateMachine extends AbstractStateMachine 
 			
 			if (responseApdu != null) {
 				short sw = responseApdu.getStatusWord();
-				return (Iso7816Lib.isReportingError(sw) || Iso7816Lib.isReportingWarning(sw));
+				return (Iso7816Lib.isReportingError(sw) || Iso7816Lib.isReportingWarning(sw) || PlatformUtil.is4xxxStatusWord(sw));
 			}
 			return false;
 		}
@@ -164,30 +160,32 @@ public abstract class AbstractProtocolStateMachine extends AbstractStateMachine 
 		ApduSpecification apduSpec = apdus.get(apduId);
 		
 		if(apduSpec == null) {
-			log(this, "APDU matching failed due to command \"" + apduId + "\" being unknown", DEBUG);
+			log(this, "APDU matching failed due to command \"" + apduId + "\" being unknown", LogLevel.DEBUG);
 			return false;
 		}
 		
 		if(processingData == null) {
-			log(this, "APDU matching failed due to missing processing data", DEBUG);
+			log(this, "APDU matching failed due to missing processing data", LogLevel.DEBUG);
 			return false;
 		}
 		apdu = processingData.getCommandApdu();
 		boolean match = apduSpec.matchesFullApdu(apdu);
 		
 		if(match) {
-			log(this, "received APDU matches definition of command \"" + apduId + "\"", DEBUG);
+			log(this, "received APDU matches definition of command \"" + apduId + "\"", LogLevel.DEBUG);
 		}
 		
 		return match;
 	}
 	
-	// -----------------------------------------------
-	// XXX AMY remove these methods (from model)
-	// -----------------------------------------------
-		
+	@Override
+	public boolean isMoveToStackRequested() {
+		return false;
+	}
+	
 	public void createNewApduSpecification(String id) {
 		this.apduSpecification = new ApduSpecification(id);
+		apduSpecification.getTags().setStrictOrder(ARBITRARY_ORDER);
 	}
 	
 	public void createNewTagSpecification(TlvTag tag) {

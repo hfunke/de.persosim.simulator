@@ -82,10 +82,7 @@ public class PrimitiveTlvDataObject extends TlvDataObject {
 	 */
 	public PrimitiveTlvDataObject(TlvTag tlvTagInput, TlvLength tlvLengthInput, TlvValuePlain tlvValuePlainInput, boolean performValidityChecksInput) {
 		super(performValidityChecksInput);
-		
-		if(tlvTagInput == null) {throw new NullPointerException("tag must not be null");}
-		if(tlvValuePlainInput == null) {throw new NullPointerException("value must not be null");}
-		
+	
 		this.setTag(tlvTagInput, performValidityChecksInput);
 		this.setValue(tlvValuePlainInput);
 		
@@ -143,6 +140,16 @@ public class PrimitiveTlvDataObject extends TlvDataObject {
 	 */
 	public PrimitiveTlvDataObject(TlvTag tlvTagInput) {
 		this(tlvTagInput, new TlvValuePlain());
+	}
+	
+	@Override
+	public int hashCode() {
+		return super.hashCode(); //super implementation already covers tlvValuePlain implicitly through getValue()
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		return super.equals(obj); //super implementation already covers tlvValuePlain implicitly through getValue()
 	}
 	
 	/*--------------------------------------------------------------------------------*/
@@ -207,7 +214,7 @@ public class PrimitiveTlvDataObject extends TlvDataObject {
 	public boolean isValidBerEncoding() {
 		if(!super.isValidBerEncoding()) {return false;}
 		
-		return isPrimitiveTLVObject();
+		return tlvTag.indicatesEncodingPrimitive();
 	}
 	
 }

@@ -1,10 +1,5 @@
 package de.persosim.simulator.crypto;
 
-import static de.persosim.simulator.utils.PersoSimLogger.DEBUG;
-import static de.persosim.simulator.utils.PersoSimLogger.ERROR;
-import static de.persosim.simulator.utils.PersoSimLogger.log;
-import static de.persosim.simulator.utils.PersoSimLogger.logException;
-
 import java.math.BigInteger;
 import java.security.GeneralSecurityException;
 import java.security.InvalidAlgorithmParameterException;
@@ -28,8 +23,7 @@ import java.security.spec.InvalidKeySpecException;
 import java.security.spec.KeySpec;
 import java.util.Arrays;
 
-import org.bouncycastle.jcajce.provider.asymmetric.util.EC5Util;
-import org.bouncycastle.math.ec.ECFieldElement;
+import org.globaltester.cryptoprovider.Crypto;
 
 import de.persosim.simulator.tlv.Asn1;
 import de.persosim.simulator.tlv.ConstructedTlvDataObject;
@@ -38,22 +32,31 @@ import de.persosim.simulator.tlv.TlvConstants;
 import de.persosim.simulator.tlv.TlvDataObject;
 import de.persosim.simulator.tlv.TlvDataObjectContainer;
 import de.persosim.simulator.tlv.TlvTag;
+import de.persosim.simulator.tlv.TlvTagIdentifier;
 import de.persosim.simulator.utils.HexString;
 import de.persosim.simulator.utils.Utils;
 
 /**
  * This class provides static methods offering support for basic operations in the field of cryptography.
  * 
- * XXX functional overlap with {@link Crypto} - merge?
- * 
  * @author slutters
  *
  */
 public class CryptoUtil {
+	
+	public static final BigInteger ZERO = BigInteger.ZERO;
+	public static final BigInteger ONE = BigInteger.ONE;
+	public static final BigInteger TWO = ONE.add(ONE);
+	public static final BigInteger THREE = TWO.add(ONE);
+	
 	public static final String CIPHER_DELIMITER = "/";
 	
 	public static final byte[] BITMASK            = new byte[]{(byte) 0x01, (byte) 0x02, (byte) 0x04, (byte) 0x08, (byte) 0x10, (byte) 0x20, (byte) 0x40, (byte) 0x80};
 	public static final byte[] BITMASK_COMPLEMENT = new byte[]{(byte) 0xFE, (byte) 0xFD, (byte) 0xFB, (byte) 0xF7, (byte) 0xEF, (byte) 0xDF, (byte) 0xBF, (byte) 0x7F};
+	
+	public static final byte ENCODING_UNCOMPRESSED = -1;
+	public static final byte ENCODING_COMPRESSED   = 0;
+	public static final byte ENCODING_HYBRID       = 1;
 	
 	/**
 	 * This method extracts the basic cipher name from the full cipher
@@ -64,7 +67,13 @@ public class CryptoUtil {
 	 * @return the basic cipher name
 	 */
 	public static String getCipherNameAsString(String cAlgNMP) {
-		return cAlgNMP.substring(0, cAlgNMP.indexOf(CIPHER_DELIMITER));
+		int index = cAlgNMP.indexOf(CIPHER_DELIMITER);
+		if(index < 0) {
+			//if no delimiter is found
+			return cAlgNMP;
+		} else{
+			return cAlgNMP.substring(0, index);
+		}
 	}
 	
 	/**
@@ -102,141 +111,260 @@ public class CryptoUtil {
 	/*--------------------------------------------------------------------------------*/
 	
 	/**
-	 * TODO remove BC dependency, maybe move to a dedicated helper class
-	 * 
-	 * This method performs EC scalar point multiplication
+	 * This method returns the X-coordinate of the point returned e.g. by point addition or point doubling.
+	 * @param p the prime used by the curve
+	 * @param lambda the lambda value specific to the calling method
+	 * @param xp the X-coordinate of input point P
+	 * @param xq the X-coordinate of input point Q
+	 * @return the X-coordinate of the point returned e.g. by point addition or point doubling
+	 */
+	private static BigInteger computeXr(BigInteger p, BigInteger lambda, BigInteger xp, BigInteger xq) {
+		return (((lambda.modPow(TWO, p).subtract(xq))).subtract(xp)).mod(p);
+	}
+	
+	/**
+	 * This method returns the X-coordinate of the point returned e.g. by point addition or point doubling.
+	 * @param p the prime used by the curve
+	 * @param lambda the lambda value specific to the calling method
+	 * @param xp the X-coordinate of input point P
+	 * @return the X-coordinate of the point returned e.g. by point addition or point doubling
+	 */
+	private static BigInteger computeXr(BigInteger p, BigInteger lambda, BigInteger xp) {
+		return computeXr(p, lambda, xp, xp);
+	}
+	
+	/**
+	 * This method returns the Y-coordinate of the point R returned e.g. by point addition or point doubling.
+	 * @param p the prime used by the curve
+	 * @param lambda lambda the lambda value specific to the calling method
+	 * @param xp the X-coordinate of input point P
+	 * @param yp the Y-coordinate of input point P
+	 * @param xr the X-coordinate of the result point R
+	 * @return
+	 */
+	private static BigInteger computeYr(BigInteger p, BigInteger lambda, BigInteger xp, BigInteger yp, BigInteger xr) {
+		return ((lambda.multiply(xp.subtract(xr)).mod(p)).subtract(yp)).mod(p);
+	}
+	
+	/**
+	 * This method performs EC point addition
 	 * @param curve the elliptic curve to be used
-	 * @param ecPoint the point to be multiplied
-	 * @param multiplicator the scalar multiplier
+	 * @param ecPointQ the first point for addition
+	 * @param ecPointP the second point for addition
+	 * @return the result of the point addition
+	 */
+	public static ECPoint addPoint(EllipticCurve curve, ECPoint ecPointQ, ECPoint ecPointP) {
+		if (ecPointQ.equals(ecPointP)) {return doublePoint(curve, ecPointQ);}
+		if (ecPointQ.equals(ECPoint.POINT_INFINITY)) {return ecPointP;}
+		if (ecPointP.equals(ECPoint.POINT_INFINITY)) {return ecPointQ;}
+		
+		BigInteger p = ((ECFieldFp) curve.getField()).getP();
+		BigInteger xq = ecPointQ.getAffineX();
+		BigInteger yq = ecPointQ.getAffineY();
+		BigInteger xp = ecPointP.getAffineX();
+		BigInteger yp = ecPointP.getAffineY();
+
+		BigInteger lambda = ((yq.subtract(yp)).multiply(xq.subtract(xp).modInverse(p))).mod(p);
+		BigInteger xr = computeXr(p, lambda, xp, xq);
+		BigInteger yr = computeYr(p, lambda, xp, yp, xr);
+
+		return new ECPoint(xr, yr);
+	}
+	
+	/**
+	 * This method performs EC point doubling
+	 * @param curve the elliptic curve to be used
+	 * @param ecPointP the second point for addition
+	 * @return the result of the point doubling
+	 */
+	public static ECPoint doublePoint(EllipticCurve curve, ECPoint ecPointP) {
+		if (ecPointP.equals(ECPoint.POINT_INFINITY)) {return ecPointP;}
+
+		BigInteger p = ((ECFieldFp) curve.getField()).getP();
+		BigInteger a = curve.getA();
+		BigInteger xp = ecPointP.getAffineX();
+		BigInteger yp = ecPointP.getAffineY();
+
+		BigInteger lambda = ((((xp.pow(2)).multiply(THREE)).add(a)).multiply((yp.multiply(TWO)).modInverse(p))).mod(p);
+		
+		BigInteger xr = computeXr(p, lambda, xp);
+		BigInteger yr = computeYr(p, lambda, xp, yp, xr);
+
+		return new ECPoint(xr, yr);
+	}
+	
+	/**
+	 * This method performs EC scalar point multiplication using Double-and-add method.
+	 * The method is optimized for performance performing actual multiplication with scalar.mod(order).
+	 * @param curve the elliptic curve to be used
+	 * @param order the order of the curve
+	 * @param ecPointP the point to be multiplied
+	 * @param scalar the scalar multiplier
 	 * @return the multiplied EC point
 	 */
-	public static ECPoint scalarPointMultiplication(EllipticCurve curve, ECPoint ecPoint, BigInteger multiplicator) {
-		org.bouncycastle.math.ec.ECCurve curveBc;
-		org.bouncycastle.math.ec.ECPoint pointBc, pointBcMult;
-		
-		curveBc = EC5Util.convertCurve(curve);
-		pointBc = EC5Util.convertPoint(curveBc, ecPoint, false);
-		
-		pointBcMult = pointBc.multiply(multiplicator);
-		
-		ECFieldElement ecfX = pointBcMult.normalize().getXCoord();
-		ECFieldElement ecfY = pointBcMult.normalize().getYCoord();
-		
-		BigInteger x = ecfX.toBigInteger();
-		BigInteger y = ecfY.toBigInteger();
-		
-		ECPoint ecPointMult = new ECPoint(x, y);
-		
-		return ecPointMult;
+	public static ECPoint scalarPointMultiplication(EllipticCurve curve, BigInteger order, ECPoint ecPointP, BigInteger scalar) {
+		return scalarPointMultiplication(curve, ecPointP, scalar.mod(order));
 	}
 	
 	/**
-	 * TODO remove BC dependency, maybe move to a dedicated helper class
+	 * This method performs EC scalar point multiplication using Double-and-add
+	 * method. For improved performance preferably use
+	 * {@link #scalarPointMultiplication(EllipticCurve, BigInteger, ECPoint, BigInteger)}
+	 * or make sure the scalar you provide already is taken modulo the order of the
+	 * field (scalar.mod(order)).
 	 * 
-	 * This method decodes a byte array and restores the represented {@link ECPoint}
-	 * @param curve the curve of the point
-	 * @param ecPointEncoding the encoding of the point
-	 * @return an {@link ECPoint} representing the encoded point
+	 * @param curve
+	 *            the elliptic curve to be used
+	 * @param ecPointP
+	 *            the point to be multiplied
+	 * @param scalar
+	 *            the scalar multiplier
+	 * @return the multiplied EC point
 	 */
-	public static ECPoint decode(EllipticCurve curve, byte[] ecPointEncoding) {
-		org.bouncycastle.math.ec.ECCurve curveBc;
-		org.bouncycastle.math.ec.ECPoint decodedPointBc;
+	public static ECPoint scalarPointMultiplication(EllipticCurve curve, ECPoint ecPointP, BigInteger scalar) {
+		if (ecPointP.equals(ECPoint.POINT_INFINITY)) {return ecPointP;}
 		
-		curveBc = EC5Util.convertCurve(curve);
+		ECPoint ecPointR = ECPoint.POINT_INFINITY;
 		
-		try {
-			decodedPointBc = curveBc.decodePoint(ecPointEncoding);
-		} catch (Exception e) {
-			log(CryptoUtil.class, "erroneous point encoding of " + ecPointEncoding.length + " bytes length is: " + HexString.encode(ecPointEncoding), DEBUG);
-			logException(CryptoUtil.class, e, ERROR);
-			throw e;
+		for (int i = (scalar.bitLength()) - 1; i >= 0; i--) {
+			ecPointR = doublePoint(curve, ecPointR);
+			
+			if (scalar.testBit(i)) {
+				ecPointR = addPoint(curve, ecPointR, ecPointP);
+			}
+				
 		}
 		
-		ECFieldElement ecfX = decodedPointBc.normalize().getXCoord();
-		ECFieldElement ecfY = decodedPointBc.normalize().getYCoord();
-		
-		BigInteger x = ecfX.toBigInteger();
-		BigInteger y = ecfY.toBigInteger();
-		
-		ECPoint ecPointDecoded = new ECPoint(x, y);
-		
-		return ecPointDecoded;
+		return ecPointR;
 	}
 	
 	/**
-	 * This method encodes an {@link ECPoint} (using uncompressed encoding
-	 * according to X9.62)
+	 * This method encodes an {@link ECPoint} (using uncompressed, compressed or
+	 * hybrid encoding according to X9.62).
 	 * <p/> 
 	 * According to ANSI X9.62 EC public point encoding in uncompressed mode is
-	 * supposed to look as follows: 04|x-coordinate|y-coordinate If an encoded
-	 * coordinate does not match the reference length l, it needs to be padded
-	 * with leading 00 bytes. The complete point encoding hence needs to be of
-	 * total length (2 * l) + 1.
+	 * supposed to look as follows:
+	 * uncompressed: 04||x-coordinate||y-coordinate
+	 * compressed  : 02|03||x-coordinate
+	 * hybrid      : 06|07||x-coordinate||y-coordinate
+	 * If an encoded coordinate does not match the reference length l, it needs
+	 * to be padded with leading 00 bytes.
 	 * 
 	 * @param ecPoint
 	 *            point to be encoded
 	 * @param referenceLength
-	 *            expected length l of each coordinate in bytes 
-	 * @return byte[] containing the uncompressed point encoding
+	 *            expected length l of each coordinate in bytes
+	 * @param encoding
+	 * 			  either {@link #ENCODING_UNCOMPRESSED}, {@link #ENCODING_COMPRESSED} or
+	 * 			  {@link #ENCODING_HYBRID}
+	 * @return byte[] containing the point encoding
 	 */
-	public static byte[] encode(ECPoint ecPoint, int referenceLength) {
-
-		// extract coordinates
-		byte[] xBytes = Utils.toUnsignedByteArray(ecPoint.getAffineX());
-		byte[] yBytes = Utils.toUnsignedByteArray(ecPoint.getAffineY());
+	public static byte[] encode(ECPoint ecPoint, int referenceLength, byte encoding) {
+		byte encodingIndicator;
+		byte[] pointEncoding;
 		
-		//check coordinate lengths
-		if ((xBytes.length > referenceLength) || (yBytes.length > referenceLength)) {
-			throw new IllegalArgumentException("Coordinates of point are larger than reference length");
+		byte[] xBytes = getProjectedRepresentation(ecPoint, referenceLength, true);
+		byte[] yBytes = getProjectedRepresentation(ecPoint, referenceLength, false);
+		
+		boolean yBitSet = ecPoint.getAffineY().testBit(0);
+		
+		if(encoding == ENCODING_COMPRESSED) {
+			if(yBitSet) {
+				encodingIndicator = (byte) 0x03;
+			} else {
+				encodingIndicator = (byte) 0x02;
+			}
+			pointEncoding = xBytes;
+		} else {
+			if(encoding == ENCODING_UNCOMPRESSED) {
+				encodingIndicator = (byte) 0x04;
+			} else {
+				if(encoding == ENCODING_HYBRID) {
+					if(yBitSet) {
+						encodingIndicator = (byte) 0x07;
+					} else {
+						encodingIndicator = (byte) 0x06;
+					}
+				} else {
+					throw new IllegalArgumentException("unsupported encoding");
+				}
+			}
+			
+			pointEncoding = Utils.concatByteArrays(xBytes, yBytes);
 		}
-
-		// add padding to x coordinate it needed
-		if (xBytes.length < referenceLength) {
-			byte[] padding = new byte[referenceLength - xBytes.length];
-			Arrays.fill(padding, (byte) 0x00);
-			xBytes = Utils.concatByteArrays(padding, xBytes);
-		}
-
-		// add padding to x coordinate it needed
-		if (yBytes.length < referenceLength) {
-			byte[] padding = new byte[referenceLength - yBytes.length];
-			Arrays.fill(padding, (byte) 0x00);
-			yBytes = Utils.concatByteArrays(padding, yBytes);
-		}
-
-		return Utils.concatByteArrays(new byte[] { (byte) 0x04 }, xBytes,
-				yBytes);
+		
+		return Utils.concatByteArrays(new byte[] {encodingIndicator}, pointEncoding);
 	}
 	
 	/**
-	 * TODO remove BC dependency, maybe move to a dedicated helper class
-	 * 
-	 * This method performs EC point addition
-	 * @param curve the elliptic curve to be used
-	 * @param ecPoint1 the first point for addition
-	 * @param ecPoint2 the second point for addition
-	 * @return the addition result
+	 * This method returns a projection of the provided point's selected coordinate.
+	 * If the length of the selected encoded coordinate is less than the provided reference length, it is padded to this length.
+	 * @param ecPoint the point to work on
+	 * @param referenceLength the desired reference length
+	 * @param encodeX true: encode x-coordinate, false: encode y-coordinate
+	 * @return the projection of the provided point's selected coordinate
 	 */
-	public static ECPoint pointAddition(EllipticCurve curve, ECPoint ecPoint1, ECPoint ecPoint2) {
-		org.bouncycastle.math.ec.ECCurve curveBc;
-		org.bouncycastle.math.ec.ECPoint pointBc1, pointBc2, pointBcAdd;
+	public static byte[] getProjectedRepresentation(ECPoint ecPoint, int referenceLength, boolean encodeX) {
+		BigInteger coordinate;
+		String coordinateName;
 		
-		curveBc = EC5Util.convertCurve(curve);
+		if(encodeX) {
+			coordinate = ecPoint.getAffineX();
+			coordinateName = "x";
+		} else{
+			coordinate = ecPoint.getAffineY();
+			coordinateName = "y";
+		}
 		
-		pointBc1 = EC5Util.convertPoint(curveBc, ecPoint1, false);
-		pointBc2 = EC5Util.convertPoint(curveBc, ecPoint2, false);
+		// extract coordinate
+		byte[] bytes = Utils.toUnsignedByteArray(coordinate);
 		
-		pointBcAdd = pointBc1.add(pointBc2);
+		//check coordinate length
+		if (bytes.length > referenceLength) {
+			throw new IllegalArgumentException(coordinateName + "-coordinate of point is larger than reference length");
+		}
 		
-		ECFieldElement ecfX = pointBcAdd.normalize().getXCoord();
-		ECFieldElement ecfY = pointBcAdd.normalize().getYCoord();
+		// add padding to coordinate if needed
+		if (bytes.length < referenceLength) {
+			byte[] padding = new byte[referenceLength - bytes.length];
+			Arrays.fill(padding, (byte) 0x00);
+			bytes = Utils.concatByteArrays(padding, bytes);
+		}
 		
-		BigInteger x = ecfX.toBigInteger();
-		BigInteger y = ecfY.toBigInteger();
+		return bytes;
+	}
+	
+	/**
+	 * Computes reference length l in bytes used for Point-to-Octet-String Conversion according to ANSI X9.62 chapter 4.3.6.
+	 * @param q the prime
+	 * @return reference length l
+	 */
+	public static int getPublicPointReferenceLengthL(BigInteger q) {
+		int log = q.bitLength();
+		return ((Double) Math.ceil(log/8.0)).intValue();
+	}
+	
+	/**
+	 * This method implements the key compression of an ECPublicKey as described
+	 * in TR-03110 Part 3 Appendix A.2.2.3. It does NOT return a recoverable
+	 * compressed variant of the key.
+	 * 
+	 * @param publicKey
+	 * @return the compressed key
+	 */
+	public static byte[] compressEcPublicKey(ECPublicKey ecPublicKey) {
+		ECPoint publicPoint = ecPublicKey.getW();
 		
-		ECPoint ecPointAdd = new ECPoint(x, y);
+		ECField field = ecPublicKey.getParams().getCurve().getField();
+		if(field instanceof ECFieldFp){
+			ECFieldFp fieldFp = (ECFieldFp) field;
+			
+			int expectedLength = CryptoUtil.getPublicPointReferenceLengthL(fieldFp.getP());
+			
+			return getProjectedRepresentation(publicPoint, expectedLength, true);
+		}
 		
-		return ecPointAdd;
+		return null;
 	}
 	
 	public static KeyPair generateKeyPair(DomainParameterSet domParamSet, SecureRandom secRandom) throws NoSuchAlgorithmException, NoSuchProviderException, InvalidAlgorithmParameterException {
@@ -263,7 +391,7 @@ public class CryptoUtil {
 		KeySpec mappedPublicKeySpec = keySpecsPiccMapped[1];
 		
 		// Actually create keys from key specs
-		KeyFactory keyFactory = KeyFactory.getInstance(domainParametersMapped.getKeyAgreementAlgorithm());
+		KeyFactory keyFactory = KeyFactory.getInstance(domainParametersMapped.getKeyAgreementAlgorithm(), Crypto.getCryptoProvider());
 		PrivateKey mappedPrivateKey = keyFactory.generatePrivate(mappedPrivateKeySpec);
 		PublicKey mappedPublicKey = keyFactory.generatePublic(mappedPublicKeySpec);
 		return new KeyPair(mappedPublicKey, mappedPrivateKey);
@@ -292,6 +420,10 @@ public class CryptoUtil {
 	 * @return ASN.1 formatted TLV object
 	 */
 	public static ConstructedTlvDataObject restoreAsn1SignatureStructure(byte [] signatureData){
+		if(signatureData.length % 2 > 0) {
+			throw new IllegalArgumentException("input expected to be of even length");
+		}
+		
 		int length = signatureData.length / 2;
 		
 		BigInteger r = new BigInteger(Arrays.copyOfRange(signatureData, 0, length));
@@ -305,8 +437,29 @@ public class CryptoUtil {
 		integers.addTlvDataObject(integerRObject);
 		integers.addTlvDataObject(integerSObject);
 		
-		ConstructedTlvDataObject signatureObject = new ConstructedTlvDataObject(new TlvTag(Asn1.SEQUENCE), integers);
-		return signatureObject;
+		return new ConstructedTlvDataObject(new TlvTag(Asn1.SEQUENCE), integers);
+	}
+	
+	/**
+	 * This method compresses an ECDSA signature.
+	 * 
+	 * @param unprocessedSignature a byte array representation of an ECDSA signature e.g. as returned by the {@link Signature#verify(byte[])} method
+	 * @param l the byte length of the single signature component
+	 * @return a byte array of 2l bytes length concatenating the signature components
+	 */
+	public static byte[] compressAsn1SignatureStructure(byte[] unprocessedSignature, int l) {
+		ConstructedTlvDataObject signatureTlvUnprocessed = new ConstructedTlvDataObject(unprocessedSignature);
+		
+		PrimitiveTlvDataObject pTlv1 = (PrimitiveTlvDataObject) signatureTlvUnprocessed.getTlvDataObject(new TlvTagIdentifier(new TlvTag((byte) 0x02), 0));
+		PrimitiveTlvDataObject pTlv2 = (PrimitiveTlvDataObject) signatureTlvUnprocessed.getTlvDataObject(new TlvTagIdentifier(new TlvTag((byte) 0x02), 1));
+		
+		byte[] c1 = pTlv1.getValueField();
+		byte[] c2 = pTlv2.getValueField();
+		
+		c1 = Tr03111Utils.i2os(c1, l);
+		c2 = Tr03111Utils.i2os(c2, l);
+		
+		return Utils.concatByteArrays(c1, c2);
 	}
 
 	/**
@@ -317,7 +470,7 @@ public class CryptoUtil {
 	 * @throws GeneralSecurityException
 	 */
 	public static ECPublicKey parsePublicKeyEc(ConstructedTlvDataObject publicKeyData, ECParameterSpec paramSpec) throws GeneralSecurityException {
-		TlvDataObject publicPointData = publicKeyData.getTagField(TlvConstants.TAG_86);
+		TlvDataObject publicPointData = publicKeyData.getTlvDataObject(TlvConstants.TAG_86);
 		ECPoint publicPoint = DomainParameterSetEcdh
 				.reconstructPoint(publicPointData.getValueField());
 
@@ -334,12 +487,12 @@ public class CryptoUtil {
 	 * @throws GeneralSecurityException
 	 */
 	public static ECParameterSpec parseParameterSpecEc(ConstructedTlvDataObject publicKeyData){
-		TlvDataObject modulusData = publicKeyData.getTagField(TlvConstants.TAG_81);
-		TlvDataObject firstCoefficientData = publicKeyData.getTagField(TlvConstants.TAG_82);
-		TlvDataObject secondCoefficientData = publicKeyData.getTagField(TlvConstants.TAG_83);
-		TlvDataObject basePointData = publicKeyData.getTagField(TlvConstants.TAG_84);
-		TlvDataObject orderOfBasePointData = publicKeyData.getTagField(TlvConstants.TAG_85);
-		TlvDataObject cofactorData = publicKeyData.getTagField(TlvConstants.TAG_87);
+		TlvDataObject modulusData = publicKeyData.getTlvDataObject(TlvConstants.TAG_81);
+		TlvDataObject firstCoefficientData = publicKeyData.getTlvDataObject(TlvConstants.TAG_82);
+		TlvDataObject secondCoefficientData = publicKeyData.getTlvDataObject(TlvConstants.TAG_83);
+		TlvDataObject basePointData = publicKeyData.getTlvDataObject(TlvConstants.TAG_84);
+		TlvDataObject orderOfBasePointData = publicKeyData.getTlvDataObject(TlvConstants.TAG_85);
+		TlvDataObject cofactorData = publicKeyData.getTlvDataObject(TlvConstants.TAG_87);
 
 		ECField field = new ECFieldFp(new BigInteger(1,
 				modulusData.getValueField()));
@@ -351,6 +504,67 @@ public class CryptoUtil {
 		return new ECParameterSpec(curve, basePoint,
 				new BigInteger(1, orderOfBasePointData.getValueField()),
 				Utils.getIntFromUnsignedByteArray(cofactorData.getValueField()));
+	}
+	
+	/**
+	 * This method recreates a {@link KeyPair} based on the provided domain parameter id and raw Byte arrays for public and private key.
+	 * @param standDomParamId the domain parameter id for standardized domain parameters
+	 * @param publicKeyData the raw public key data
+	 * @param privateKeyData the raw private key data
+	 * @return the reconstructed key pair
+	 */
+	public static KeyPair reconstructKeyPair(int standDomParamId, byte[] publicKeyData, byte[] privateKeyData) {
+		return reconstructKeyPair(StandardizedDomainParameters.getDomainParameterSetById(standDomParamId), publicKeyData, privateKeyData);
+	}
+
+	/**
+	 * This method recreates a {@link KeyPair} based on the provided domain parameter id and HexStrings for public and private key.
+	 * @param standDomParamId the domain parameter id for standardized domain parameters
+	 * @param publicKeyData the raw public key data
+	 * @param privateKeyData the raw private key data
+	 * @return the reconstructed key pair
+	 */
+	public static KeyPair reconstructKeyPair(int domainParamId, String pubKey, String privKey) {
+		return reconstructKeyPair(domainParamId, HexString.toByteArray(pubKey), HexString.toByteArray(privKey));
+		
+	}
+	
+	/**
+	 * This method recreates a {@link KeyPair} based on the provided {@link DomainParameterSet} and raw Byte arrays for public and private key.
+	 * @param domParams the domain parameters to be used
+	 * @param publicKeyData the raw public key data
+	 * @param privateKeyData the raw private key data
+	 * @return the reconstructed key pair
+	 */
+	public static KeyPair reconstructKeyPair(DomainParameterSet domParams, byte[] publicKeyData, byte[] privateKeyData) {
+		PublicKey publicKey = domParams.reconstructPublicKey(publicKeyData);
+		PrivateKey privateKey = domParams.reconstructPrivateKey(privateKeyData);
+		return new KeyPair(publicKey, privateKey);
+	}
+	
+	/**
+	 * This method pads the given data to the given block size
+	 * @param unpaddedData the data to be padded
+	 * @param blockSize the block size
+	 * @return the padded data
+	 */
+	public static byte[] padData(byte[] unpaddedData, int blockSize) {
+		
+		/* +1 for mandatory padding byte 0x80 */
+		int overlap = (unpaddedData.length + 1) % blockSize;
+		
+		int nrOfZeros = blockSize - overlap;
+		
+		if (overlap == 0) {
+			//input plus padding byte already matches BlockSize
+			nrOfZeros = 0;
+		}
+		
+		byte[] paddingZeros = new byte[nrOfZeros];
+		Arrays.fill(paddingZeros, (byte) 0x00);
+		
+		return Utils.concatByteArrays(unpaddedData, new byte[]{(byte) 0x80}, paddingZeros);
+		
 	}
 	
 }

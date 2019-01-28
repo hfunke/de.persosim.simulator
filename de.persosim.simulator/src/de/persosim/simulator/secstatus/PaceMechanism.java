@@ -3,7 +3,9 @@ package de.persosim.simulator.secstatus;
 import java.util.Arrays;
 
 import de.persosim.simulator.cardobjects.PasswordAuthObject;
-import de.persosim.simulator.protocols.ta.CertificateHolderAuthorizationTemplate;
+import de.persosim.simulator.protocols.Oid;
+import de.persosim.simulator.protocols.pace.PaceOid;
+import de.persosim.simulator.protocols.ta.TaOid;
 
 /**
  * This {@link SecMechanism} implements the information store for security state
@@ -12,17 +14,27 @@ import de.persosim.simulator.protocols.ta.CertificateHolderAuthorizationTemplate
  * @author mboonk
  * 
  */
-public class PaceMechanism extends
-		EntityAuthenticationWithPasswordMechanism {
-
+public class PaceMechanism extends AbstractSecMechanism {
+	
+	private PaceOid paceOid;
 	private PasswordAuthObject usedPassword;
-	private byte [] compressedEphemeralPublicKey;
-	private CertificateHolderAuthorizationTemplate usedChat;
+	private byte [] compressedEphemeralPublicKeyChip;
+	private byte [] compressedEphemeralPublicKeyTerminal;
+	private Oid oidForTa;
 
-	public PaceMechanism(PasswordAuthObject usedPassword, byte[] compressedPublicKey, CertificateHolderAuthorizationTemplate chat){
+	public PaceMechanism(PaceOid paceOid, PasswordAuthObject usedPassword, byte[] compressedEphemeralPublicKeyChip, byte[] compressedEphemeralPublicKeyTerminal, Oid terminalTypeOid){
+		this.paceOid = paceOid;
 		this.usedPassword = usedPassword;
-		this.compressedEphemeralPublicKey = compressedPublicKey;
-		this.usedChat = chat;
+		this.compressedEphemeralPublicKeyChip = compressedEphemeralPublicKeyChip;
+		this.compressedEphemeralPublicKeyTerminal = compressedEphemeralPublicKeyTerminal;
+		this.oidForTa = terminalTypeOid;
+	}
+	
+	/**
+	 * @return the OID, that was used to execute PACE
+	 */
+	public PaceOid getPaceOid() {
+		return paceOid;
 	}
 	
 	/**
@@ -33,17 +45,24 @@ public class PaceMechanism extends
 	}
 
 	/**
-	 * @return the ephemeralPublicKey of the PICC generated during PACE
+	 * @return the compressed ephemeral public key of the chip generated while performing PACE
 	 */
-	public byte [] getCompressedEphemeralPublicKey() {
-		return Arrays.copyOf(compressedEphemeralPublicKey, compressedEphemeralPublicKey.length);
+	public byte [] getCompressedEphemeralPublicKeyChip() {
+		return Arrays.copyOf(compressedEphemeralPublicKeyChip, compressedEphemeralPublicKeyChip.length);
 	}
 	
 	/**
-	 * @return the usedChat
+	 * @return the {@link TaOid} identifying the terminal type
 	 */
-	public CertificateHolderAuthorizationTemplate getUsedChat() {
-		return usedChat;
+	public Oid getOidForTa() {
+		return oidForTa;
+	}
+	
+	/**
+	 * @return the compressed ephemeral public Key of the terminal conveyed while performing PACE
+	 */
+	public byte[] getCompressedEphemeralPublicKeyTerminal() {
+		return compressedEphemeralPublicKeyTerminal;
 	}
 
 }

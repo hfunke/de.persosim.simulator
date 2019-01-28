@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plugin>
+
+   <extension
+         id="de.persosim.simulator.ui.fragment"
+         point="org.eclipse.e4.workbench.model">
+      <fragment
+            uri="fragment.e4xmi">
+      </fragment>
+   </extension>
+   <extension
+         id="de.persosim.simulator.ui.persosimView"
+         point="org.eclipse.ui.views">
+      <e4view
+            allowMultiple="false"
+            category="org.globaltester.base.ui.views.category"
+            class="de.persosim.simulator.ui.parts.PersoSimPart"
+            icon="persosim_small.png"
+            id="de.persosim.simulator.ui.parts.PersoSimPart"
+            name="PersoSim"
+            restorable="true">
+      </e4view>
+   </extension>
+   
+
+
+</plugin>

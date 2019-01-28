@@ -1,17 +1,46 @@
 Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
-Bundle-Name: PersoSim
-Bundle-SymbolicName: de.persosim.simulator
-Bundle-Version: 0.1.0.qualifier
-Bundle-Vendor: HJP Consulting GmbH
-Bundle-RequiredExecutionEnvironment: JavaSE-1.7
+Bundle-Name: PersoSim Simulator
+Bundle-SymbolicName: de.persosim.simulator;singleton:=true
+Bundle-Version: 0.11.1.qualifier
+Bundle-Vendor: secunet Security Networks AG
+Bundle-RequiredExecutionEnvironment: JavaSE-1.8
 Export-Package: de.persosim.simulator,
+ de.persosim.simulator.apdu,
+ de.persosim.simulator.apdumatching,
  de.persosim.simulator.cardobjects,
  de.persosim.simulator.crypto,
+ de.persosim.simulator.crypto.certificates,
+ de.persosim.simulator.documents,
+ de.persosim.simulator.exception,
  de.persosim.simulator.perso,
+ de.persosim.simulator.perso.xstream,
  de.persosim.simulator.platform,
+ de.persosim.simulator.preferences,
+ de.persosim.simulator.processing,
  de.persosim.simulator.protocols,
+ de.persosim.simulator.protocols.auxVerification,
+ de.persosim.simulator.protocols.ca,
+ de.persosim.simulator.protocols.file,
  de.persosim.simulator.protocols.pace,
+ de.persosim.simulator.protocols.ri,
  de.persosim.simulator.protocols.ta,
+ de.persosim.simulator.seccondition,
+ de.persosim.simulator.secstatus,
+ de.persosim.simulator.securemessaging,
+ de.persosim.simulator.statemachine,
  de.persosim.simulator.tlv,
  de.persosim.simulator.utils
+Bundle-ClassPath: .
+Import-Package: org.osgi.framework,
+ org.osgi.service.log;version="1.3.0",
+ org.osgi.util.tracker
+Eclipse-BundleShape: dir
+Bundle-ActivationPolicy: lazy
+Bundle-Activator: de.persosim.simulator.Activator
+Require-Bundle: org.globaltester.cryptoprovider,
+ org.eclipse.equinox.registry,
+ org.globaltester.simulator,
+ org.globaltester.logging,
+ org.globaltester.lib.xstream,
+ org.globaltester.base

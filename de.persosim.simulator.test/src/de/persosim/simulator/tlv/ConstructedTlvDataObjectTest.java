@@ -488,7 +488,7 @@ public class ConstructedTlvDataObjectTest {
 		path.add(tagC4);
 		path.add(tagP2);
 
-		assertEquals("Is expected path", tlvObject1.getTagField(path),
+		assertEquals("Is expected path", tlvObject1.getTlvDataObject(path),
 				tlvObject11112);
 	}
 	
@@ -541,7 +541,7 @@ public class ConstructedTlvDataObjectTest {
 
 		path.add(tagP3);
 
-		assertEquals("Is expected path", tlvObject1.getTagField(path),
+		assertEquals("Is expected path", tlvObject1.getTlvDataObject(path),
 				tlvObject11113);
 	}
 	
@@ -701,6 +701,18 @@ public class ConstructedTlvDataObjectTest {
 		tlvObject1.removeTlvDataObject(path);
 
 		assertEquals("Is expected path", tlvObject1111.getNoOfElements(), 2);
+	}
+	
+	/**
+	 * Positive test case: Remove second occurrence of existing, equal children
+	 */
+	@Test
+	public void testRemoveTlvDataObjectTlvTagIdentifierEqualChildren() {
+		ConstructedTlvDataObject tlvObject = (ConstructedTlvDataObject) TlvDataObjectFactory.createTLVDataObject("3009 020101 020102 020101");
+		ConstructedTlvDataObject expectedResult = (ConstructedTlvDataObject) TlvDataObjectFactory.createTLVDataObject("3006 020101 020102");
+
+		tlvObject.removeTlvDataObject(new TlvTagIdentifier(TlvConstants.TAG_INTEGER, 2));
+		assertEquals(expectedResult, tlvObject);
 	}
 	
 	/**
@@ -1005,7 +1017,27 @@ public class ConstructedTlvDataObjectTest {
 						+ tlvObject13.getLength());
 	}
 	
-	//TODO missing tests
+	/**
+	 * Negative test case: the method setValue is getting the tlvDataObjectContainerInput, which is null.
+	 */
+	@Test(expected=IllegalArgumentException.class)
+	public void testSetValue_tlvDataObject_ContainerInput_Is_Null()
+	{
+		ConstructedTlvDataObject tlvObject = (ConstructedTlvDataObject) TlvDataObjectFactory.createTLVDataObject("21080102FFFF0202EEEE");
+		tlvObject.setValue(null);	
+	}
+	
+	/**
+	 * Negative test case: the method setTag is getting the tlvTagInput, which is null.
+	 */
+	@Test(expected=IllegalArgumentException.class)
+	public void testSetTag_TlvTag_Input_Is_Null()
+	{
+		ConstructedTlvDataObject tlvObject = (ConstructedTlvDataObject) TlvDataObjectFactory.createTLVDataObject("21080102FFFF0202EEEE");
+		tlvObject.setTag(null, true);
+	}
+	
+	//IMPL missing tests
 	// modification of child values / update of length field
 	// expected methods like testGetLength_ChildLenghtIncreased and testGetLength_ChildLengthDecreased
 	// maybe methods like testGetLength_ChildAdded and testGetLength_ChildRemoved, these can be marked with @Ignore and linked in Javadoc to similar methods like testAddTlvDataObject... 

@@ -1,64 +1,57 @@
 package de.persosim.simulator.platform;
 
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
 
-import mockit.Delegate;
-import mockit.Invocation;
-import mockit.Mock;
-import mockit.MockUp;
-import mockit.Mocked;
-import mockit.NonStrictExpectations;
-import mockit.Verifications;
-import mockit.VerificationsInOrder;
-
+import org.globaltester.logging.InfoSource;
 import org.junit.Before;
 import org.junit.Test;
 
 import de.persosim.simulator.apdu.CommandApduFactory;
 import de.persosim.simulator.apdu.ResponseApdu;
 import de.persosim.simulator.cardobjects.MasterFile;
-import de.persosim.simulator.perso.Personalization;
+import de.persosim.simulator.exception.AccessDeniedException;
 import de.persosim.simulator.processing.ProcessingData;
 import de.persosim.simulator.protocols.AbstractProtocolStateMachine;
 import de.persosim.simulator.protocols.Protocol;
 import de.persosim.simulator.protocols.ProtocolUpdate;
 import de.persosim.simulator.test.PersoSimTestCase;
 import de.persosim.simulator.tlv.TlvValuePlain;
-import de.persosim.simulator.utils.InfoSource;
+import mockit.Delegate;
+import mockit.Invocation;
+import mockit.Mocked;
+import mockit.NonStrictExpectations;
+import mockit.Verifications;
+import mockit.VerificationsInOrder;
 
 public class CommandProcessorTest extends PersoSimTestCase {
 
-	private static final int LAYER_ID = 0;
-	
-	@Mocked AbstractProtocolStateMachine mockedProtocol;
+	@Mocked Protocol mockedProtocol;
 
 	CommandProcessor commandProcessor;
 
+	InfoSource source = new InfoSource() {
+		
+		@Override
+		public String getIDString() {
+			return "TestSource";
+		}
+	};
 
 	/**
 	 * Instantiate and initialize the object under test
-	 * {@link #commandProcessor} with the mocked personalisation.
+	 * {@link #commandProcessor} with the mocked personalization.
+	 * @throws AccessDeniedException 
 	 * 
 	 */
 	@Before
-	public void setUp() {
-		final Personalization mockedPerso = new MockUp<Personalization>() {
-	        @Mock
-	        public List<AbstractProtocolStateMachine> getProtocolList(){
-	        	return Arrays.asList(new AbstractProtocolStateMachine[]{mockedProtocol});
-	        }
-	        
-	        @Mock
-	        public MasterFile getObjectTree(){
-	        	return new MasterFile();
-	        }
-	    }.getMockInstance();
+	public void setUp() throws AccessDeniedException {
+		MasterFile mf = new MasterFile();
+	    List<Protocol> protocols = new ArrayList<>();
+	    protocols.add(mockedProtocol);
 	    
-	    
-		commandProcessor = new CommandProcessor(LAYER_ID, mockedPerso);
+		commandProcessor = new CommandProcessor(protocols, mf);
 		commandProcessor.init();
-		
 	}
 	
 	/**
@@ -94,14 +87,12 @@ public class CommandProcessorTest extends PersoSimTestCase {
 	@Test
 	public void testProcessProcessingData_NoResetForActiveProtocol() {
 		// prepare the mocked protocol
-		new NonStrictExpectations(AbstractProtocolStateMachine.class) {{
+		new NonStrictExpectations() {{
 				mockedProtocol.process(withInstanceOf(ProcessingData.class));
 				result = new Delegate<AbstractProtocolStateMachine>() {
 
 					@SuppressWarnings("unused") // JMockit
 					public void process(Invocation inv,	ProcessingData processingData) {
-						InfoSource source = (InfoSource) inv.getInvokedInstance();
-
 						TlvValuePlain responseData = new TlvValuePlain(new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 });
 						ResponseApdu resp = new ResponseApdu(responseData, Iso7816.SW_9000_NO_ERROR);
 						processingData.updateResponseAPDU(source, "GetNonce processed successfully", resp);
@@ -141,14 +132,12 @@ public class CommandProcessorTest extends PersoSimTestCase {
 	@Test
 	public void testProcessProcessingData_ResetFormerlyActiveProtocol() {
 		// prepare the mocked protocol
-		new NonStrictExpectations(AbstractProtocolStateMachine.class) {{
+		new NonStrictExpectations() {{
 				mockedProtocol.process(withInstanceOf(ProcessingData.class));
 				result = new Delegate<AbstractProtocolStateMachine>() {
 
 					@SuppressWarnings("unused") // JMockit
 					public void process(Invocation inv,	ProcessingData processingData) {
-						InfoSource source = (InfoSource) inv.getInvokedInstance();
-
 						TlvValuePlain responseData = new TlvValuePlain(new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 });
 						ResponseApdu resp = new ResponseApdu(responseData, Iso7816.SW_9000_NO_ERROR);
 						processingData.updateResponseAPDU(source, "GetNonce processed successfully", resp);
@@ -193,14 +182,12 @@ public class CommandProcessorTest extends PersoSimTestCase {
 	@Test
 	public void testPowerOn_ResetForActiveProtocols() {
 		// prepare the mocked protocol
-		new NonStrictExpectations(AbstractProtocolStateMachine.class) {{
+		new NonStrictExpectations() {{
 				mockedProtocol.process(withInstanceOf(ProcessingData.class));
 				result = new Delegate<AbstractProtocolStateMachine>() {
 
 					@SuppressWarnings("unused") // JMockit
 					public void process(Invocation inv,	ProcessingData processingData) {
-						InfoSource source = (InfoSource) inv.getInvokedInstance();
-
 						TlvValuePlain responseData = new TlvValuePlain(new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08 });
 						ResponseApdu resp = new ResponseApdu(responseData, Iso7816.SW_9000_NO_ERROR);
 						processingData.updateResponseAPDU(source, "GetNonce processed successfully", resp);

@@ -9,21 +9,17 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
-import javax.xml.bind.Unmarshaller;
-import javax.xml.bind.annotation.XmlRootElement;
-import javax.xml.bind.annotation.XmlTransient;
+import org.globaltester.cryptoprovider.Crypto;
 
-import de.persosim.simulator.crypto.Crypto;
+import de.persosim.simulator.crypto.certificates.CvOid;
+import de.persosim.simulator.protocols.GenericOid;
 import de.persosim.simulator.protocols.Oid;
+import de.persosim.simulator.protocols.Tr03110;
 import de.persosim.simulator.utils.HexString;
 import de.persosim.simulator.utils.Utils;
 
-//XXX MBK complete this class and extract according methods from TR03110
-@XmlRootElement
-public class TaOid extends Oid {
-	public final static byte[] bytes_id_BSI          = {0x04, 0x00, 0x7F, 0x00, 0x07};
-	
-	public final static TaOid id_TA                  = new TaOid(Utils.appendBytes(bytes_id_BSI, new byte[]{0x02, 0x02, 0x02}), "id-TA");
+public class TaOid extends GenericOid implements Tr03110, CvOid {
+	public final static TaOid id_TA                  = new TaOid(Utils.appendBytes(id_BSI, new byte[]{0x02, 0x02, 0x02}), "id-TA");
 	
 	public static final TaOid id_TA_RSA              = new TaOid(Utils.appendBytes(id_TA.oidByteArray,     (byte) 0x01),  "id-TA-RSA");
 	public static final TaOid id_TA_RSA_v1_5_SHA_1   = new TaOid(Utils.appendBytes(id_TA_RSA.oidByteArray, (byte) 0x01),  "id-TA-RSA-v1-5-SHA-1");
@@ -39,27 +35,7 @@ public class TaOid extends Oid {
 	public static final TaOid id_TA_ECDSA_SHA_256    = new TaOid(Utils.appendBytes(id_TA_ECDSA.oidByteArray, (byte) 0x03), "id-TA-ECDSA-SHA-256");
 	public static final TaOid id_TA_ECDSA_SHA_384    = new TaOid(Utils.appendBytes(id_TA_ECDSA.oidByteArray, (byte) 0x04), "id-TA-ECDSA-SHA-384");
 	public static final TaOid id_TA_ECDSA_SHA_512    = new TaOid(Utils.appendBytes(id_TA_ECDSA.oidByteArray, (byte) 0x05), "id-TA-ECDSA-SHA-512");
-
-	// Auxiliary data verification
-	public final static TaOid id_AuxiliaryData       = new TaOid(Utils.appendBytes(bytes_id_BSI, new byte[]{0x03, 0x01, 0x04}), "id-AuxiliaryData");
 	
-	public static final TaOid id_DateOfBirth         = new TaOid(Utils.appendBytes(id_AuxiliaryData.oidByteArray, (byte) 0x01), "id-DateOfBirth");
-	public static final TaOid id_DateOfExpiry        = new TaOid(Utils.appendBytes(id_AuxiliaryData.oidByteArray, (byte) 0x02), "id-DateOfExpiry");
-	public static final TaOid id_CommunityID         = new TaOid(Utils.appendBytes(id_AuxiliaryData.oidByteArray, (byte) 0x03), "id-CommunityID");
-	
-	// terminal types
-	public final static TaOid id_Roles               = new TaOid(Utils.appendBytes(bytes_id_BSI, new byte[]{0x03, 0x01, 0x02}), "id-roles");
-	
-	public static final TaOid id_IS                  = new TaOid(Utils.appendBytes(id_Roles.oidByteArray, (byte) 0x01), "id-IS");
-	public static final TaOid id_AT                  = new TaOid(Utils.appendBytes(id_Roles.oidByteArray, (byte) 0x02), "id-AT");
-	public static final TaOid id_ST                  = new TaOid(Utils.appendBytes(id_Roles.oidByteArray, (byte) 0x03), "id-ST"); 
-	
-	// certificate extensions
-
-	public final static TaOid id_Extensions          = new TaOid(Utils.appendBytes(bytes_id_BSI, new byte[]{0x03, 0x01, 0x03}), "id-extensions");
-	
-	public static final TaOid id_Description         = new TaOid(Utils.appendBytes(id_Extensions.oidByteArray, (byte) 0x01), "id-description");
-	public static final TaOid id_Sector              = new TaOid(Utils.appendBytes(id_Extensions.oidByteArray, (byte) 0x02), "id-sector");
 	
 	private static Set<TaOid> allKnownTaOids= new HashSet<>();
 	static {
@@ -82,12 +58,8 @@ public class TaOid extends Oid {
 
 	}
 	
-	@XmlTransient
 	private String idString;
 
-	public TaOid() {
-	}
-	
 	private TaOid(byte[] oidByteArray, String idString) {
 		super(oidByteArray);
 		this.idString = idString;
@@ -124,17 +96,6 @@ public class TaOid extends Oid {
 		return idString;
 	}
 	
-	/**
-	 * JAXB callback
-	 * <p/>
-	 * Used to initialize idString
-	 * @param u
-	 * @param parent
-	 */
-	protected void afterUnmarshal(Unmarshaller u, Object parent) {
-		idString = getStringRepresentation(oidByteArray);
-	}
-
 	public String getHashAlgorithmName() {
 		if (Arrays.equals(oidByteArray, id_TA_ECDSA_SHA_1.oidByteArray) || Arrays.equals(oidByteArray, id_TA_RSA_PSS_SHA_1.oidByteArray) || Arrays.equals(oidByteArray, id_TA_RSA_v1_5_SHA_1.oidByteArray)){
 			return "SHA-1";
@@ -164,31 +125,53 @@ public class TaOid extends Oid {
 	 * @throws NoSuchAlgorithmException
 	 * @throws NoSuchProviderException
 	 */	
-	public Signature getSignature() throws NoSuchAlgorithmException, NoSuchProviderException {
+	public Signature getSignature() throws NoSuchAlgorithmException {
+		String signatureString = getSignatureString();
+		if(signatureString != null) {
+			return Signature.getInstance(signatureString, Crypto.getCryptoProvider());
+		} else{
+			return null;
+		}
+	}
+	
+	public String getSignatureString() {
 		if (equals(TaOid.id_TA_RSA_v1_5_SHA_1)){
-			return Signature.getInstance("SHA1withRSA", Crypto.getCryptoProvider());
+			return "SHA1withRSA";
 		} else if (equals(TaOid.id_TA_RSA_v1_5_SHA_256)){
-			return Signature.getInstance("SHA256withRSA", Crypto.getCryptoProvider());
+			return "SHA256withRSA";
 		} else if (equals(TaOid.id_TA_RSA_v1_5_SHA_512)){
-			return Signature.getInstance("SHA512withRSA", Crypto.getCryptoProvider());
+			return "SHA512withRSA";
 		} else if (equals(TaOid.id_TA_RSA_PSS_SHA_1)){
-			return Signature.getInstance("SHA1withRSA/PSS", Crypto.getCryptoProvider());
+			return "SHA1withRSA/PSS";
 		} else if (equals(TaOid.id_TA_RSA_PSS_SHA_256)){
-			return Signature.getInstance("SHA256withRSA/PSS", Crypto.getCryptoProvider());
+			return "SHA256withRSA/PSS";
 		} else if (equals(TaOid.id_TA_RSA_PSS_SHA_512)){
-			return Signature.getInstance("SHA512withRSA/PSS", Crypto.getCryptoProvider());
+			return "SHA512withRSA/PSS";
 		} else if (equals(TaOid.id_TA_ECDSA_SHA_1)){
-			return Signature.getInstance("SHA1withECDSA", Crypto.getCryptoProvider());
+			return "SHA1withECDSA";
 		} else if (equals(TaOid.id_TA_ECDSA_SHA_224)){
-			return Signature.getInstance("SHA224withECDSA", Crypto.getCryptoProvider());
+			return "SHA224withECDSA";
 		} else if (equals(TaOid.id_TA_ECDSA_SHA_256)){
-			return Signature.getInstance("SHA256withECDSA", Crypto.getCryptoProvider());
+			return "SHA256withECDSA";
 		} else if (equals(TaOid.id_TA_ECDSA_SHA_384)){
-			return Signature.getInstance("SHA384withECDSA", Crypto.getCryptoProvider());
+			return "SHA384withECDSA";
 		} else if (equals(TaOid.id_TA_ECDSA_SHA_512)){
-			return Signature.getInstance("SHA512withECDSA", Crypto.getCryptoProvider());
+			return "SHA512withECDSA";
 		}
 		return null;
 	}
-	
+
+	@Override
+	public String getKeyType() {
+		if (equals(TaOid.id_TA_RSA_v1_5_SHA_1) || equals(TaOid.id_TA_RSA_v1_5_SHA_256)
+				|| equals(TaOid.id_TA_RSA_v1_5_SHA_512) || equals(TaOid.id_TA_RSA_PSS_SHA_1)
+				|| equals(TaOid.id_TA_RSA_PSS_SHA_256) || equals(TaOid.id_TA_RSA_PSS_SHA_512)) {
+			return "RSA";
+		} else if (equals(TaOid.id_TA_ECDSA_SHA_1) || equals(TaOid.id_TA_ECDSA_SHA_224)
+				|| equals(TaOid.id_TA_ECDSA_SHA_256) || equals(TaOid.id_TA_ECDSA_SHA_384)
+				|| equals(TaOid.id_TA_ECDSA_SHA_512)) {
+			return "EC";
+		}
+		return null;
+	}
 }

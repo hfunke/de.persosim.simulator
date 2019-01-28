@@ -1,8 +1,5 @@
 package de.persosim.simulator.protocols.ta;
 
-import javax.xml.bind.annotation.XmlElement;
-import javax.xml.bind.annotation.XmlRootElement;
-
 import de.persosim.simulator.utils.BitField;
 
 /**
@@ -12,50 +9,21 @@ import de.persosim.simulator.utils.BitField;
  * @author mboonk
  * 
  */
-@XmlRootElement
-public class RelativeAuthorization {
-	@XmlElement
-	CertificateRole role;
-	@XmlElement
-	BitField authorization;
+public class RelativeAuthorization extends Authorization {
 
 	public RelativeAuthorization() {
 	}
 	
+	public RelativeAuthorization(BitField authorization) {
+		super(authorization);
+	}
+	
 	public RelativeAuthorization(CertificateRole role, BitField authorization) {
-		this.role = role;
-		this.authorization = authorization;
+		this(authorization.concatenate(role.getField()));
 	}
-
+	
 	public CertificateRole getRole() {
-		return role;
+		return CertificateRole.getFromMostSignificantBits(authorization);
 	}
-
-	public BitField getAuthorization() {
-		return authorization;
-	}
-
-	/**
-	 * @return the role and relative authorization as a bit field.
-	 */
-	public BitField getRepresentation() {
-		return authorization.concatenate(role.getField());
-	}
-
-	/**
-	 * Construct the effective Authorization by calculating a logical and on the
-	 * {@link BitField} representations of role and authorization.
-	 * 
-	 * @param authorization
-	 * @return
-	 */
-	public RelativeAuthorization buildEffectiveAuthorization(
-			RelativeAuthorization authorization) {
-		BitField effectiveRole = authorization.getRole().getField()
-				.and(this.role.getField());
-		BitField effectiveAuth = authorization.getAuthorization().and(
-				this.authorization);
-		return new RelativeAuthorization(
-				CertificateRole.getFromField(effectiveRole), effectiveAuth);
-	}
+	
 }
